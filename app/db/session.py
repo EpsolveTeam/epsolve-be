@@ -7,7 +7,7 @@ engine = create_engine(
     pool_pre_ping=True    
 )
 
-# dipakai di setiap endpoint API
+
 def get_session():
     with Session(engine) as session:
         yield session
