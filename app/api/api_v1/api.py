@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-# import router dari endpoint di sini
+from app.api.api_v1.endpoints import tickets
 
 api_router = APIRouter()
-# api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
+api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
