@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -6,13 +7,16 @@ from app.core.logging import setup_logging
 
 setup_logging()
 
+env_state = os.getenv("ENV_STATE", "")
+current_root_path = f"/{env_state}" if env_state in ["dev", "prod"] else ""
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Backend API Epson Smart Helpdesk",
-    version="1.0.0"
+    description="Backend API Epsolve",
+    version="1.0.0",
+    root_path=current_root_path 
 )
 
-# Konfigurasi CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,7 +25,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Menghubungkan semua rute API
 app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
@@ -29,5 +32,6 @@ def root():
     return {
         "message": f"Welcome to {settings.PROJECT_NAME} API",
         "status": "online",
-        "docs": "/docs"
+        "environment": env_state if env_state else "local",
+        "docs": f"{current_root_path}/docs"
     }
