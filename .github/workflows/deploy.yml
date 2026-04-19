@@ -13,13 +13,15 @@ jobs:
 
       - name: Create Deployment Package
         run: |
-          # Kompres file proyek, abaikan folder yang tidak perlu
-          tar -czf deploy_package.tar.gz \
+          # Buat tarball di folder temporary di luar project directory
+          tar -czf ../deploy_package.tar.gz \
           --exclude='.git' \
           --exclude='.github' \
           --exclude='venv' \
           --exclude='__pycache__' \
           .
+          # Pindahkan kembali ke folder utama agar bisa dibaca oleh step SCP
+          mv ../deploy_package.tar.gz .
 
       - name: Copy package to Server
         uses: appleboy/scp-action@master
