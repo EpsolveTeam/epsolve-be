@@ -1,0 +1,69 @@
+name: Epsolve Artifact Deployment
+
+on:
+  push:
+    branches: [ main, dev ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Deployment Package
+        run: |
+          # Kompres file proyek, abaikan folder yang tidak perlu
+          tar -czf deploy_package.tar.gz \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='venv' \
+          --exclude='__pycache__' \
+          .
+
+      - name: Copy package to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy_package.tar.gz"
+          target: "/tmp"
+
+      - name: Execute Remote Deployment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Tentukan folder berdasarkan branch
+            if [ "${{ github.ref_name }}" == "main" ]; then
+              APP_DIR="~/epsolve/prod"
+              PORT=8001
+              NAME="epsolve-prod"
+            else
+              APP_DIR="~/epsolve/dev"
+              PORT=8000
+              NAME="epsolve-dev"
+            fi
+
+            # Ekstrak file ke folder tujuan
+            mkdir -p $APP_DIR
+            tar -xzf /tmp/deploy_package.tar.gz -C $APP_DIR
+            rm /tmp/deploy_package.tar.gz
+
+            cd $APP_DIR
+            
+            # Setup venv jika belum ada
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+
+            # Install dependensi
+            source venv/bin/activate
+            pip install -r requirements.txt
+
+            # Restart menggunakan PM2
+            pm2 restart $NAME || pm2 start "uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
+            pm2 save
