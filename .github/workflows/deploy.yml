@@ -39,33 +39,47 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # Tentukan folder berdasarkan branch
+            # Gunakan path absolut untuk menghindari error tilde (~)
             if [ "${{ github.ref_name }}" == "main" ]; then
-              APP_DIR="~/epsolve/prod"
+              APP_DIR="/home/ubuntu/epsolve/prod"
               PORT=8001
               NAME="epsolve-prod"
             else
-              APP_DIR="~/epsolve/dev"
+              APP_DIR="/home/ubuntu/epsolve/dev"
               PORT=8000
               NAME="epsolve-dev"
             fi
 
-            # Ekstrak file ke folder tujuan
+            # Pastikan folder ada
             mkdir -p $APP_DIR
-            tar -xzf /tmp/deploy_package.tar.gz -C $APP_DIR
-            rm /tmp/deploy_package.tar.gz
+
+            # Ekstrak file
+            if [ -f /tmp/deploy_package.tar.gz ]; then
+              tar -xzf /tmp/deploy_package.tar.gz -C $APP_DIR
+              rm /tmp/deploy_package.tar.gz
+              echo "✅ Extraction successful to $APP_DIR"
+            else
+              echo "❌ Error: Package not found in /tmp"
+              exit 1
+            fi
 
             cd $APP_DIR
             
+            # Debug: Cek apakah requirements.txt benar-benar mendarat
+            ls -la
+
             # Setup venv jika belum ada
             if [ ! -d "venv" ]; then
               python3 -m venv venv
             fi
 
-            # Install dependensi
-            source venv/bin/activate
-            pip install -r requirements.txt
+            # Install dependensi (Gunakan path venv langsung agar lebih stabil)
+            ./venv/bin/pip install --upgrade pip
+            ./venv/bin/pip install -r requirements.txt
 
-            # Restart menggunakan PM2
-            pm2 restart $NAME || pm2 start "uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
+            # Restart menggunakan PM2 dengan ENV_STATE
+            # Kita tambahkan 'ENV_STATE' agar root_path di FastAPI kamu aktif
+            ENV_STATE=${{ github.ref_name }} pm2 restart $NAME || \
+            ENV_STATE=${{ github.ref_name }} pm2 start "./venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
+            
             pm2 save
