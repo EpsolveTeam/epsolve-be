@@ -1,11 +1,15 @@
+import os
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, text
 from sqlalchemy import pool
 
 from alembic import context
 from app.core.config import settings
 from app.models.base import SQLModel
+
+ENV_STATE = os.getenv("ENV_STATE", "dev")
+SCHEMA_NAME = "dev_schema" if ENV_STATE == "dev" else "public"
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -67,8 +71,14 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}"))
+        connection.execute(text(f"SET search_path TO {SCHEMA_NAME}, public"))
+        connection.commit()
+
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            version_table_schema=SCHEMA_NAME,
         )
 
         with context.begin_transaction():

@@ -20,7 +20,7 @@ def set_search_path(dbapi_connection, connection_record):
     schema_name = "dev_schema" if env_state == "dev" else "public"
     
     try:
-        cursor.execute(f"SET search_path TO {schema_name}")
+        cursor.execute(f"SET search_path TO {schema_name}, public")
     finally:
         cursor.close()
 

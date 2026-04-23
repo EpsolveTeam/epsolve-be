@@ -1,3 +1,6 @@
 2026-04-08 10:17:10 | INFO     | app.api.api_v1.endpoints.tickets:create_ticket:23 - Menerima permintaan pembuatan tiket dari: useranjay@gmail.com
 2026-04-08 10:17:13 | SUCCESS  | app.api.api_v1.endpoints.tickets:create_ticket:37 - Tiket #5 berhasil disimpan di database Supabase.
 2026-04-08 10:17:13 | ERROR    | app.services.email_service:send_ticket_notification:25 - Gagal mengirim email untuk tiket #5: 'Settings' object has no attribute 'MAIL_FROM'
+2026-04-23 14:33:19 | INFO     | app.api.api_v1.endpoints.tickets:read_tickets:59 - Admin mengakses seluruh daftar tiket.
+2026-04-23 14:33:24 | INFO     | app.api.api_v1.endpoints.tickets:read_tickets:59 - Admin mengakses seluruh daftar tiket.
+2026-04-23 14:33:25 | INFO     | app.api.api_v1.endpoints.tickets:read_tickets:59 - Admin mengakses seluruh daftar tiket.
