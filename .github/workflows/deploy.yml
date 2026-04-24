@@ -51,6 +51,7 @@ jobs:
             # Generate .env file
             cat <<EOF > .env.${{ github.ref_name }}
             PROJECT_NAME="Epsolve"
+            SECRET_KEY="${{ secrets.SECRET_KEY }}"
             ENV_STATE=${{ github.ref_name }}
             DATABASE_URL="${{ secrets.DATABASE_URL }}"
             SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
