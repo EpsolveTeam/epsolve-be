@@ -13,14 +13,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create Deployment Package
-        run: |
-          tar -czf deploy_package.tar.gz \
-                --exclude='.git' \
-                --exclude='.github' \
-                --exclude='venv' \
-                --exclude='__pycache__' \
-                --warning=no-file-changed \
-                .
+        run: git archive -o deploy_package.tar.gz HEAD
 
       - name: Copy package to Server
         uses: appleboy/scp-action@master
@@ -49,6 +42,7 @@ jobs:
             fi
 
             mkdir -p $APP_DIR
+            rm -rf $APP_DIR/*   # 🔥 penting biar clean
             tar -xzf /tmp/deploy_package.tar.gz -C $APP_DIR
             rm /tmp/deploy_package.tar.gz
 
@@ -72,11 +66,10 @@ jobs:
               python3 -m venv venv
             fi
 
-            # Install & Restart
             ./venv/bin/pip install --upgrade pip
             ./venv/bin/pip install -r requirements.txt
 
             ENV_STATE=${{ github.ref_name }} pm2 restart $NAME || \
-            ENV_STATE=${{ github.ref_name }} pm2 start "./venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
+            ENV_STATE=${{ github.ref_name }} pm2 start "venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
             
             pm2 save
