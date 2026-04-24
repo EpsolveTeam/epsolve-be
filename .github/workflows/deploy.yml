@@ -15,11 +15,12 @@ jobs:
       - name: Create Deployment Package
         run: |
           tar -czf deploy_package.tar.gz \
-          --exclude='.git' \
-          --exclude='.github' \
-          --exclude='venv' \
-          --exclude='__pycache__' \
-          .
+                --exclude='.git' \
+                --exclude='.github' \
+                --exclude='venv' \
+                --exclude='__pycache__' \
+                --warning=no-file-changed \
+                .
 
       - name: Copy package to Server
         uses: appleboy/scp-action@master
