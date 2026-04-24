@@ -5,15 +5,20 @@ from typing import Optional
 ENV_STATE = os.getenv("ENV_STATE", "dev")
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Epsolve" 
-    DATABASE_URL: str 
+    PROJECT_NAME: str = "Epsolve"
+    DATABASE_URL: str
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: str
     OPENAI_API_KEY: str
-    RESEND_API_KEY: str 
-    
+    RESEND_API_KEY: str
+
     MAIL_FROM: str = "onboarding@resend.dev"
-    MAIL_TO: str 
+    MAIL_TO: str
+
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 6        # 6 jam 
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7               # 7 hari
 
     model_config = SettingsConfigDict(
         env_file=f".env.{ENV_STATE}",
