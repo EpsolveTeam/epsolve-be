@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from loguru import logger
+from app.models.user import User
 
+from app.core.dependencies import require_admin
+from app.core.dependencies import require_admin
 from app.db.session import get_session
 from app.models.knowledge import KnowledgeBase
+from app.models.ticket import Ticket
 
 router = APIRouter()
 
@@ -57,7 +61,11 @@ def create_knowledge(kb_in: KnowledgeCreate, db: Session = Depends(get_session))
         raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server")
 
 @router.get("/", response_model=List[KnowledgeResponse])
-def get_all_knowledge(category: Optional[str] = None, db: Session = Depends(get_session)):
+def get_all_knowledge(
+    category: Optional[str] = Query(None, description="Filter kategori"), 
+    product_type: Optional[str] = Query(None, description="Filter jenis produk"),
+    db: Session = Depends(get_session)
+):
     """
     Endpoint untuk READ semua data Knowledge Base.
     Bisa difilter berdasarkan kategori menggunakan query parameter (?category=...).
@@ -67,9 +75,10 @@ def get_all_knowledge(category: Optional[str] = None, db: Session = Depends(get_
     query = db.query(KnowledgeBase)
     if category:
         query = query.filter(KnowledgeBase.category == category)
+    if product_type:
+        query = query.filter(KnowledgeBase.product_type == product_type) 
         
-    results = query.all()
-    return results
+    return query.all()
 
 @router.get("/{kb_id}", response_model=KnowledgeResponse)
 def get_knowledge_by_id(kb_id: int, db: Session = Depends(get_session)):
@@ -123,3 +132,50 @@ def update_knowledge(kb_id: int, kb_in: KnowledgeUpdate, db: Session = Depends(g
     
     logger.info(f"Knowledge Base ID #{kb_id} berhasil diperbarui.")
     return kb_data
+
+@router.post("/from-ticket/{ticket_id}", status_code=status.HTTP_201_CREATED)
+def create_kb_from_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin)
+):
+    """
+    Mengubah tiket yang sudah diselesaikan menjadi artikel Knowledge Base.
+    """
+    logger.info(f"Admin {current_user.email} mengkonversi tiket #{ticket_id} menjadi Knowledge Base")
+
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Tiket tidak ditemukan.")
+    
+    if not ticket.admin_response:
+        raise HTTPException(
+            status_code=400, 
+            detail="Tiket ini belum memiliki balasan dari admin. Tidak bisa dijadikan Knowledge Base."
+        )
+
+    kb_content = f"**Keluhan Pelanggan:**\n{ticket.description}\n\n**Solusi Helpdesk:**\n{ticket.admin_response}"
+
+    try:
+        new_kb = KnowledgeBase(
+            title=ticket.subject,
+            content=kb_content,
+            category=ticket.category,
+            product_type=ticket.product_type,
+        )
+        
+        db.add(new_kb)
+        db.commit()
+        db.refresh(new_kb)
+        
+        logger.success(f"Knowledge Base baru #{new_kb.id} berhasil dibuat dari Tiket #{ticket_id}")
+        
+        return {
+            "message": "Artikel Knowledge Base berhasil dibuat dari tiket", 
+            "kb_id": new_kb.id,
+            "data": new_kb
+        }
+        
+    except Exception as e:
+        logger.error(f"Gagal membuat KB dari tiket: {str(e)}")
+        raise HTTPException(status_code=500, detail="Terjadi kesalahan server saat menyimpan Knowledge Base")

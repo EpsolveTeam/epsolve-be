@@ -1,42 +1,73 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from loguru import logger
+from supabase import create_client, Client
+from pydantic import BaseModel
+from app.services.email_service import send_ticket_notification, send_resolution_email
+
 from app.db.session import get_session
 from app.models.ticket import Ticket 
-from pydantic import BaseModel
-from loguru import logger
-from app.services.email_service import send_ticket_notification
+from app.models.user import User, UserRole
+from app.core.config import settings
+from app.core.dependencies import get_current_user
 
 router = APIRouter()
 
-class TicketCreate(BaseModel):
-    user_email: str
-    subject: str
-    description: str
-    category: str # diisi: Hardware / Firmware / Quality Printing / Part Problem
-    image_url: Optional[str] = None
+supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+BUCKET_NAME = "helpdesk-files" 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_ticket(ticket_in: TicketCreate, db: Session = Depends(get_session)):
+def create_ticket(
+    user_email: str = Form(...),
+    subject: str = Form(...),
+    description: str = Form(...),
+    category: str = Form(...),
+    product_type: str = Form(...), 
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
     """
-    Endpoint untuk membuat tiket baru (Eskalasi) dan mengirim notifikasi email[cite: 129, 267].
+    Endpoint untuk membuat tiket baru + Upload Gambar ke Supabase Storage.
+    Menggunakan Form-Data karena ada file upload.
     """
-    logger.info(f"Menerima eskalasi tiket kategori {ticket_in.category} dari {ticket_in.user_email}")
+    logger.info(f"Menerima eskalasi tiket dari {user_email} (User ID: {current_user.id})")
     
     try:
+        final_image_url = None
+        
+        if image:
+            file_bytes = image.file.read()
+            file_extension = image.filename.split(".")[-1]
+            unique_filename = f"tickets/{uuid.uuid4()}.{file_extension}"
+            
+            supabase.storage.from_(BUCKET_NAME).upload(
+                path=unique_filename,
+                file=file_bytes,
+                file_options={"content-type": image.content_type}
+            )
+            
+            final_image_url = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
+            logger.info(f"Gambar berhasil diupload: {final_image_url}")
+
         new_ticket = Ticket(
-            user_email=ticket_in.user_email,
-            subject=ticket_in.subject,
-            description=ticket_in.description,
-            category=ticket_in.category,
-            image_url=ticket_in.image_url,
+            user_id=current_user.id, 
+            user_email=user_email,
+            subject=subject,
+            description=description,
+            category=category,
+            product_type=product_type, 
+            image_url=final_image_url,
             status="open"
         )
+        
         db.add(new_ticket)
         db.commit()
         db.refresh(new_ticket)
         
-        logger.success(f"Tiket #{new_ticket.id} berhasil disimpan di database.")
+        logger.success(f"Tiket #{new_ticket.id} berhasil disimpan.")
 
         send_ticket_notification(
             ticket_id=new_ticket.id,
@@ -45,19 +76,43 @@ def create_ticket(ticket_in: TicketCreate, db: Session = Depends(get_session)):
             description=new_ticket.description
         )
         
-        return {"message": "Tiket berhasil dibuat dan notifikasi telah dikirim", "ticket_id": new_ticket.id}
+        return {
+            "message": "Tiket berhasil dibuat dan notifikasi telah dikirim", 
+            "ticket_id": new_ticket.id,
+            "image_url": final_image_url
+        }
     
     except Exception as e:
         logger.error(f"Gagal memproses tiket: {str(e)}")
-        raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server")
+        raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server saat memproses tiket")
 
-@router.get("/", response_model=List[Ticket])
-def read_tickets(db: Session = Depends(get_session)):
+@router.get("/")
+def get_tickets(
+    status: Optional[str] = Query(None, description="Filter berdasarkan status tiket"),
+    product_type: Optional[str] = Query(None, description="Filter berdasarkan jenis produk"),
+    category: Optional[str] = Query(None, description="Filter berdasarkan kategori masalah"),
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
     """
-    Endpoint untuk Admin/Helpdesk melihat semua tiket
+    Mengambil daftar tiket. 
+    Karyawan hanya melihat tiketnya sendiri. Admin/Helpdesk melihat semua.
+    Mendukung filter query parameter (?status=...&product_type=...)
     """
-    logger.info("Admin mengakses seluruh daftar tiket.")
-    return db.query(Ticket).all()
+    query = db.query(Ticket)
+    
+    if current_user.role == UserRole.KARYAWAN:
+        query = query.filter(Ticket.user_id == current_user.id)
+
+    if status:
+        query = query.filter(Ticket.status == status)
+    if product_type:
+        query = query.filter(Ticket.product_type == product_type)
+    if category:
+        query = query.filter(Ticket.category == category)
+        
+    tickets = query.order_by(Ticket.created_at.desc()).all()
+    return tickets
 
 class TicketUpdate(BaseModel):
     status: Optional[str] = None
@@ -66,29 +121,38 @@ class TicketUpdate(BaseModel):
 @router.patch("/{ticket_id}")
 def update_ticket(
     ticket_id: int, 
-    ticket_in: TicketUpdate, # Gunakan schema baru
-    db: Session = Depends(get_session)
-    ):
+    ticket_in: TicketUpdate, 
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
     """
     Fitur bagi Admin/Helpdesk untuk merespons dan mengubah status tiket.
     """
+    if current_user.role == UserRole.KARYAWAN:
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki akses untuk membalas tiket.")
+
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         logger.error(f"Gagal update: Tiket #{ticket_id} tidak ditemukan.")
         raise HTTPException(status_code=404, detail="Tiket tidak ditemukan")
     
     old_status = ticket.status
-    # Update field yang dikirim saja
-    if ticket_in.status is not None:
-        ticket.status = ticket_in.status
-        
+    
     if ticket_in.admin_response is not None:
         ticket.admin_response = ticket_in.admin_response
-        # Otomatis ubah status jadi 'answered' / 'closed' jika dibalas?
-        # ticket.status = "answered" 
-        
+
+        if ticket_in.status is None and old_status == "open":
+            ticket.status = "answered" 
+
+        send_resolution_email(
+            ticket_id=ticket.id,
+            user_email=ticket.user_email,
+            subject=ticket.subject,
+            solution=ticket.admin_response
+        )
+
     db.commit()
     db.refresh(ticket)
-    
-    logger.info(f"Tiket #{ticket_id} diperbarui. Status: {old_status} -> {ticket.status}")
+
+    logger.info(f"Tiket #{ticket_id} diperbarui oleh Admin.")
     return {"message": f"Tiket #{ticket_id} berhasil diperbarui", "data": ticket}
