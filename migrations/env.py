@@ -57,12 +57,6 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -71,14 +65,13 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}"))
-        connection.execute(text(f"SET search_path TO {SCHEMA_NAME}, public"))
-        connection.commit()
+        # connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}"))
+        # connection.execute(text(f"SET search_path TO {SCHEMA_NAME}, public"))
+        # connection.commit()
 
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            version_table_schema=SCHEMA_NAME,
         )
 
         with context.begin_transaction():

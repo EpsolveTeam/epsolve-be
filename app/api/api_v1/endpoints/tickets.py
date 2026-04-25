@@ -59,8 +59,16 @@ def read_tickets(db: Session = Depends(get_session)):
     logger.info("Admin mengakses seluruh daftar tiket.")
     return db.query(Ticket).all()
 
+class TicketUpdate(BaseModel):
+    status: Optional[str] = None
+    admin_response: Optional[str] = None
+
 @router.patch("/{ticket_id}")
-def update_ticket_status(ticket_id: int, status: str, db: Session = Depends(get_session)):
+def update_ticket(
+    ticket_id: int, 
+    ticket_in: TicketUpdate, # Gunakan schema baru
+    db: Session = Depends(get_session)
+    ):
     """
     Fitur bagi Admin/Helpdesk untuk merespons dan mengubah status tiket.
     """
@@ -70,8 +78,17 @@ def update_ticket_status(ticket_id: int, status: str, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Tiket tidak ditemukan")
     
     old_status = ticket.status
-    ticket.status = status
+    # Update field yang dikirim saja
+    if ticket_in.status is not None:
+        ticket.status = ticket_in.status
+        
+    if ticket_in.admin_response is not None:
+        ticket.admin_response = ticket_in.admin_response
+        # Otomatis ubah status jadi 'answered' / 'closed' jika dibalas?
+        # ticket.status = "answered" 
+        
     db.commit()
+    db.refresh(ticket)
     
-    logger.warning(f"Status Tiket #{ticket_id} diubah dari {old_status} ke {status} oleh Admin.")
-    return {"message": f"Tiket #{ticket_id} diperbarui ke status {status}"}
+    logger.info(f"Tiket #{ticket_id} diperbarui. Status: {old_status} -> {ticket.status}")
+    return {"message": f"Tiket #{ticket_id} berhasil diperbarui", "data": ticket}

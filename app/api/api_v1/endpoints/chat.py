@@ -1,3 +1,5 @@
+import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -6,6 +8,9 @@ from loguru import logger
 
 from app.db.session import get_session
 from app.models.chat_log import ChatLog
+from sqlalchemy import desc
+from app.core.dependencies import get_current_user
+from app.models.user import User
 # from app.models.knowledge import KnowledgeBase # [TODO] Model untuk knowledge base (pgvector)
 
 router = APIRouter()
@@ -85,3 +90,38 @@ def get_chat_history(session_id: str, db: Session = Depends(get_session)):
         return []
         
     return chat_history
+
+class ChatSessionItem(BaseModel):
+    session_id: str
+    title: str
+    created_at: datetime
+    
+@router.get("/sessions", response_model=List[ChatSessionItem])
+def get_chat_sessions(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user) # Pakai user yang sedang login
+):
+    """
+    Mengambil daftar riwayat sesi chat user untuk ditampilkan di Sidebar.
+    Judul (title) diambil dari pertanyaan pertama user di sesi tersebut.
+    """
+    # Ambil semua chat milik user ini, urutkan dari yang terbaru
+    chats = db.query(ChatLog).filter(ChatLog.user_id == current_user.id).order_by(desc(ChatLog.created_at)).all()
+    
+    sessions_dict = {}
+    
+    # Grouping berdasarkan session_id
+    for chat in chats:
+        if chat.session_id not in sessions_dict:
+            title = (chat.user_query[:30] + '...') if len(chat.user_query) > 30 else chat.user_query
+            
+            sessions_dict[chat.session_id] = {
+                "session_id": chat.session_id,
+                "title": title,
+                "created_at": chat.created_at
+            }
+            
+    # Convert dictionary ke list
+    result = list(sessions_dict.values())
+    
+    return result

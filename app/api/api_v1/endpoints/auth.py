@@ -64,6 +64,12 @@ def login(body: LoginRequest, session: Session = Depends(get_session)):
         refresh_token=refresh_token,
     )
 
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    current_user.refresh_token_hash = None
+    session.add(current_user)
+    session.commit()
+    return {"message": "Successfully logged out"}
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(body: RefreshRequest, session: Session = Depends(get_session)):
