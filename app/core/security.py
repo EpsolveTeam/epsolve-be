@@ -5,17 +5,18 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
+import hashlib
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    hashed = hashlib.sha256(password.encode()).hexdigest()
+    return pwd_context.hash(hashed)
 
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
+def verify_password(password: str, hashed: str) -> bool:
+    hashed_input = hashlib.sha256(password.encode()).hexdigest()
+    return pwd_context.verify(hashed_input, hashed)
 
 def create_access_token(subject: UUID) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -40,12 +41,10 @@ def decode_access_token(token: str) -> str | None:
 
 
 def hash_refresh_token(token: str) -> str:
-    return pwd_context.hash(token)
-
+    return hashlib.sha256(token.encode()).hexdigest()
 
 def verify_refresh_token(token: str, hashed: str) -> bool:
-    return pwd_context.verify(token, hashed)
-
+    return hashlib.sha256(token.encode()).hexdigest() == hashed
 
 def decode_refresh_token(token: str) -> str | None:
     try:

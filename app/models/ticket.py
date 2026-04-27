@@ -10,7 +10,7 @@ class Ticket(SQLModel, table=True):
     subject: str
     description: str
     category: str = Field(index=True) 
-    product_type: Optional[str] = Field(default=None) 
+    division: Optional[str] = Field(default=None) 
     admin_response: Optional[str] = Field(default=None)
     image_url: Optional[str] = None
     status: str = Field(default="open")

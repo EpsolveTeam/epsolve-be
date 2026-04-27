@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: str
     OPENAI_API_KEY: str
-    RESEND_API_KEY: str
 
-    MAIL_FROM: str = "onboarding@resend.dev"
+    BREVO_API_KEY: str
+    BREVO_SENDER_EMAIL: str
     MAIL_TO: str
 
     SECRET_KEY: str

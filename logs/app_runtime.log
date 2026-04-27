@@ -4,3 +4,13 @@
 2026-04-23 14:33:19 | INFO     | app.api.api_v1.endpoints.tickets:read_tickets:59 - Admin mengakses seluruh daftar tiket.
 2026-04-23 14:33:24 | INFO     | app.api.api_v1.endpoints.tickets:read_tickets:59 - Admin mengakses seluruh daftar tiket.
 2026-04-23 14:33:25 | INFO     | app.api.api_v1.endpoints.tickets:read_tickets:59 - Admin mengakses seluruh daftar tiket.
+2026-04-25 21:25:37 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID 62f208e2-ab42-4162-a506-fe4f621d0a6f sedang mengakses data Analytics Dashboard.
+2026-04-25 21:27:05 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID f1f171cb-1e8a-475a-84c1-827bbdca1bcb sedang mengakses data Analytics Dashboard.
+2026-04-25 21:46:30 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID f1f171cb-1e8a-475a-84c1-827bbdca1bcb sedang mengakses data Analytics Dashboard.
+2026-04-25 21:53:23 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID f1f171cb-1e8a-475a-84c1-827bbdca1bcb sedang mengakses data Analytics Dashboard.
+2026-04-25 21:54:49 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID f1f171cb-1e8a-475a-84c1-827bbdca1bcb sedang mengakses data Analytics Dashboard.
+2026-04-25 21:56:22 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID f1f171cb-1e8a-475a-84c1-827bbdca1bcb sedang mengakses data Analytics Dashboard.
+2026-04-25 22:01:43 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID f1f171cb-1e8a-475a-84c1-827bbdca1bcb sedang mengakses data Analytics Dashboard.
+2026-04-25 22:01:45 | INFO     | app.services.email_service:send_analytics_report_email:191 - Email laporan analytics berhasil dikirim ke dzikrifivr@gmail.com
+2026-04-25 22:03:52 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:27 - Admin dengan ID f1f171cb-1e8a-475a-84c1-827bbdca1bcb sedang mengakses data Analytics Dashboard.
+2026-04-25 22:03:53 | INFO     | app.services.email_service:send_analytics_report_email:132 - Email laporan analytics berhasil dikirim ke dzikrifivr@gmail.com

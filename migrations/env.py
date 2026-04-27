@@ -8,9 +8,6 @@ from alembic import context
 from app.core.config import settings
 from app.models.base import SQLModel
 
-ENV_STATE = os.getenv("ENV_STATE", "dev")
-SCHEMA_NAME = "dev_schema" if ENV_STATE == "dev" else "public"
-
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

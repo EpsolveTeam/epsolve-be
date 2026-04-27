@@ -24,7 +24,7 @@ def create_ticket(
     subject: str = Form(...),
     description: str = Form(...),
     category: str = Form(...),
-    product_type: str = Form(...), 
+    division: str = Form(...),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
@@ -58,7 +58,7 @@ def create_ticket(
             subject=subject,
             description=description,
             category=category,
-            product_type=product_type, 
+            division=division,
             image_url=final_image_url,
             status="open"
         )
@@ -89,16 +89,16 @@ def create_ticket(
 @router.get("/")
 def get_tickets(
     status: Optional[str] = Query(None, description="Filter berdasarkan status tiket"),
-    product_type: Optional[str] = Query(None, description="Filter berdasarkan jenis produk"),
+    division: Optional[str] = Query(None, description="Filter berdasarkan divisi"),
     category: Optional[str] = Query(None, description="Filter berdasarkan kategori masalah"),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Mengambil daftar tiket. 
-    Karyawan hanya melihat tiketnya sendiri. Admin/Helpdesk melihat semua.
-    Mendukung filter query parameter (?status=...&product_type=...)
-    """
+     Mengambil daftar tiket. 
+     Karyawan hanya melihat tiketnya sendiri. Admin/Helpdesk melihat semua.
+     Mendukung filter query parameter (?status=...&division=...)
+     """
     query = db.query(Ticket)
     
     if current_user.role == UserRole.KARYAWAN:
@@ -106,8 +106,8 @@ def get_tickets(
 
     if status:
         query = query.filter(Ticket.status == status)
-    if product_type:
-        query = query.filter(Ticket.product_type == product_type)
+    if division:
+        query = query.filter(Ticket.division == division)
     if category:
         query = query.filter(Ticket.category == category)
         

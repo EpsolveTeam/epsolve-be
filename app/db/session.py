@@ -16,11 +16,9 @@ def set_search_path(dbapi_connection, connection_record):
     berdasarkan ENV_STATE (dev atau prod).
     """
     cursor = dbapi_connection.cursor()
-    env_state = os.getenv("ENV_STATE", "dev")
-    schema_name = "dev_schema" if env_state == "dev" else "public"
     
     try:
-        cursor.execute(f"SET search_path TO {schema_name}, public")
+        cursor.execute("SET search_path TO public")
     finally:
         cursor.close()
 

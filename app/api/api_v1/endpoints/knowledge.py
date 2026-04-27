@@ -62,8 +62,8 @@ def create_knowledge(kb_in: KnowledgeCreate, db: Session = Depends(get_session))
 
 @router.get("/", response_model=List[KnowledgeResponse])
 def get_all_knowledge(
-    category: Optional[str] = Query(None, description="Filter kategori"), 
-    product_type: Optional[str] = Query(None, description="Filter jenis produk"),
+    category: Optional[str] = Query(None, description="Filter kategori"),
+    division: Optional[str] = Query(None, description="Filter divisi"),
     db: Session = Depends(get_session)
 ):
     """
@@ -75,8 +75,8 @@ def get_all_knowledge(
     query = db.query(KnowledgeBase)
     if category:
         query = query.filter(KnowledgeBase.category == category)
-    if product_type:
-        query = query.filter(KnowledgeBase.product_type == product_type) 
+    if division:
+        query = query.filter(KnowledgeBase.division == division) 
         
     return query.all()
 
@@ -161,7 +161,7 @@ def create_kb_from_ticket(
             title=ticket.subject,
             content=kb_content,
             category=ticket.category,
-            product_type=ticket.product_type,
+            division=ticket.division,
         )
         
         db.add(new_kb)

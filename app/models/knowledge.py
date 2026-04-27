@@ -9,7 +9,7 @@ class KnowledgeBase(SQLModel, table=True):
     title: str = Field(default="Untitled")
     content: str
     category: str = Field(default="General")
-    product_type: Optional[str] = Field(default=None)
+    division: Optional[str] = Field(default=None)
     created_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime, server_default=func.now(), nullable=False),
