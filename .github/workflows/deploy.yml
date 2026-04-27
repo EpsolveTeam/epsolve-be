@@ -44,7 +44,7 @@ jobs:
             mkdir -p $APP_DIR
             
             # Clean deployment directory excluding the virtual environment
-            find $APP_DIR -maxdepth 1 ! -name 'venv' ! -name '.' -exec rm -rf {} +
+            find $APP_DIR -mindepth 1 -maxdepth 1 ! -name 'venv' -exec rm -rf {} +
             
             tar -xzf /tmp/deploy_package.tar.gz -C $APP_DIR
             rm /tmp/deploy_package.tar.gz
