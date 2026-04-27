@@ -6,6 +6,8 @@ from loguru import logger
 
 from app.db.session import get_session
 from app.models.knowledge import KnowledgeBase
+from app.core.dependencies import require_karyawan, require_admin
+from app.models.user import User
 
 router = APIRouter()
 
@@ -29,11 +31,15 @@ class KnowledgeUpdate(BaseModel):
     category: Optional[str] = None
 
 @router.post("/", response_model=KnowledgeResponse, status_code=status.HTTP_201_CREATED)
-def create_knowledge(kb_in: KnowledgeCreate, db: Session = Depends(get_session)):
+def create_knowledge(
+    kb_in: KnowledgeCreate,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
     """
     Endpoint untuk Admin menambahkan data Knowledge Base baru (Create).
     """
-    logger.info(f"Admin menambahkan knowledge base baru: {kb_in.title} ({kb_in.category})")
+    logger.info(f"Admin {current_user.email} menambahkan knowledge base baru: {kb_in.title} ({kb_in.category})")
     
     try:
         # TODO: integrasi fungsi OpenAI untuk mengubah 'kb_in.content' menjadi Vector (embedding)
@@ -57,12 +63,16 @@ def create_knowledge(kb_in: KnowledgeCreate, db: Session = Depends(get_session))
         raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server")
 
 @router.get("/", response_model=List[KnowledgeResponse])
-def get_all_knowledge(category: Optional[str] = None, db: Session = Depends(get_session)):
+def get_all_knowledge(
+    category: Optional[str] = None,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_karyawan),
+):
     """
     Endpoint untuk READ semua data Knowledge Base.
     Bisa difilter berdasarkan kategori menggunakan query parameter (?category=...).
     """
-    logger.info("Mengambil daftar Knowledge Base.")
+    logger.info(f"User {current_user.email} mengambil daftar Knowledge Base.")
     
     query = db.query(KnowledgeBase)
     if category:
@@ -72,36 +82,49 @@ def get_all_knowledge(category: Optional[str] = None, db: Session = Depends(get_
     return results
 
 @router.get("/{kb_id}", response_model=KnowledgeResponse)
-def get_knowledge_by_id(kb_id: int, db: Session = Depends(get_session)):
+def get_knowledge_by_id(
+    kb_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_karyawan),
+):
     """
     Endpoint untuk melihat detail satu Knowledge Base berdasarkan ID.
     """
     kb_data = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
-    
+
     if not kb_data:
-        logger.warning(f"Knowledge Base ID #{kb_id} tidak ditemukan.")
+        logger.warning(f"User {current_user.email} mencoba akses Knowledge Base ID #{kb_id} yang tidak ditemukan.")
         raise HTTPException(status_code=404, detail="Data Knowledge Base tidak ditemukan")
         
     return kb_data
 
 @router.delete("/{kb_id}")
-def delete_knowledge(kb_id: int, db: Session = Depends(get_session)):
+def delete_knowledge(
+    kb_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
     """
     Endpoint untuk DELETE Knowledge Base.
     """
     kb_data = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
-    
+
     if not kb_data:
         raise HTTPException(status_code=404, detail="Data Knowledge Base tidak ditemukan")
-        
+
     db.delete(kb_data)
     db.commit()
-    logger.success(f"Knowledge Base ID #{kb_id} berhasil dihapus.")
+    logger.success(f"Knowledge Base ID #{kb_id} berhasil dihapus oleh {current_user.email}.")
     
     return {"message": f"Knowledge Base ID #{kb_id} berhasil dihapus"}
 
 @router.put("/{kb_id}", response_model=KnowledgeResponse)
-def update_knowledge(kb_id: int, kb_in: KnowledgeUpdate, db: Session = Depends(get_session)):
+def update_knowledge(
+    kb_id: int,
+    kb_in: KnowledgeUpdate,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
     """
     Endpoint untuk UPDATE data Knowledge Base.
     """
@@ -121,5 +144,5 @@ def update_knowledge(kb_id: int, kb_in: KnowledgeUpdate, db: Session = Depends(g
     db.commit()
     db.refresh(kb_data)
     
-    logger.info(f"Knowledge Base ID #{kb_id} berhasil diperbarui.")
+    logger.info(f"Knowledge Base ID #{kb_id} berhasil diperbarui oleh {current_user.email}.")
     return kb_data

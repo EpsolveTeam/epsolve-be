@@ -1,3 +1,5 @@
+from typing import Callable
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session, select
@@ -30,6 +32,18 @@ def get_current_user(
         )
 
     return user
+
+
+def require_role(*allowed_roles: UserRole) -> Callable:
+    """Factory yang mengembalikan dependency checker untuk role tertentu."""
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+    return dependency
 
 
 def require_karyawan(current_user: User = Depends(get_current_user)) -> User:

@@ -6,16 +6,21 @@ from loguru import logger
 from app.db.session import get_session
 from app.models.ticket import Ticket
 from app.models.chat_log import ChatLog
+from app.core.dependencies import require_admin
+from app.models.user import User
 
 router = APIRouter()
 
 @router.get("/summary")
-def get_analytics_summary(db: Session = Depends(get_session)):
+def get_analytics_summary(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
     """
     Endpoint untuk menarik data analytics.
     Akan mereturn total tiket, status tiket, frekuensi masalah, dan metrik chat.
     """
-    logger.info("Mengambil data analytics untuk Dashboard Manajer/Admin.")
+    logger.info(f"Admin {current_user.email} mengambil data analytics.")
     
     try:
         total_tickets = db.query(func.count(Ticket.id)).scalar() or 0

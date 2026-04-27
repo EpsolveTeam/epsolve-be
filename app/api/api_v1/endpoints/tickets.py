@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.db.session import get_session
-from app.models.ticket import Ticket 
+from app.models.ticket import Ticket
+from app.core.dependencies import require_karyawan, require_helpdesk
+from app.models.user import User
 from pydantic import BaseModel
 from loguru import logger
 from app.services.email_service import send_ticket_notification
@@ -17,11 +19,15 @@ class TicketCreate(BaseModel):
     image_url: Optional[str] = None
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_ticket(ticket_in: TicketCreate, db: Session = Depends(get_session)):
+def create_ticket(
+    ticket_in: TicketCreate,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_karyawan),
+):
     """
     Endpoint untuk membuat tiket baru (Eskalasi) dan mengirim notifikasi email[cite: 129, 267].
     """
-    logger.info(f"Menerima eskalasi tiket kategori {ticket_in.category} dari {ticket_in.user_email}")
+    logger.info(f"Menerima eskalasi tiket kategori {ticket_in.category} dari {current_user.email}")
     
     try:
         new_ticket = Ticket(
@@ -52,11 +58,14 @@ def create_ticket(ticket_in: TicketCreate, db: Session = Depends(get_session)):
         raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server")
 
 @router.get("/", response_model=List[Ticket])
-def read_tickets(db: Session = Depends(get_session)):
+def read_tickets(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_helpdesk),
+):
     """
     Endpoint untuk Admin/Helpdesk melihat semua tiket
     """
-    logger.info("Admin mengakses seluruh daftar tiket.")
+    logger.info(f"User {current_user.email} mengakses seluruh daftar tiket.")
     return db.query(Ticket).all()
 
 class TicketUpdate(BaseModel):
@@ -65,10 +74,11 @@ class TicketUpdate(BaseModel):
 
 @router.patch("/{ticket_id}")
 def update_ticket(
-    ticket_id: int, 
-    ticket_in: TicketUpdate, # Gunakan schema baru
-    db: Session = Depends(get_session)
-    ):
+    ticket_id: int,
+    ticket_in: TicketUpdate,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_helpdesk),
+):
     """
     Fitur bagi Admin/Helpdesk untuk merespons dan mengubah status tiket.
     """
@@ -90,5 +100,5 @@ def update_ticket(
     db.commit()
     db.refresh(ticket)
     
-    logger.info(f"Tiket #{ticket_id} diperbarui. Status: {old_status} -> {ticket.status}")
+    logger.info(f"Tiket #{ticket_id} diperbarui oleh {current_user.email}. Status: {old_status} -> {ticket.status}")
     return {"message": f"Tiket #{ticket_id} berhasil diperbarui", "data": ticket}
