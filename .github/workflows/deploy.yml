@@ -9,13 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create Deployment Package
+      - name: Create deployment artifact
         run: git archive -o deploy_package.tar.gz HEAD
 
-      - name: Copy package to Server
+      - name: Transfer artifact to server
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -24,7 +24,7 @@ jobs:
           source: "deploy_package.tar.gz"
           target: "/tmp"
 
-      - name: Execute Remote Deployment
+      - name: Execute remote deployment script
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -42,13 +42,16 @@ jobs:
             fi
 
             mkdir -p $APP_DIR
-            rm -rf $APP_DIR/*   # 🔥 penting biar clean
+            
+            # Clean deployment directory excluding the virtual environment
+            find $APP_DIR -maxdepth 1 ! -name 'venv' ! -name '.' -exec rm -rf {} +
+            
             tar -xzf /tmp/deploy_package.tar.gz -C $APP_DIR
             rm /tmp/deploy_package.tar.gz
 
             cd $APP_DIR
 
-            # Generate .env file
+            # Generate environment variables
             cat <<EOF > .env.${{ github.ref_name }}
             PROJECT_NAME="Epsolve"
             SECRET_KEY="${{ secrets.SECRET_KEY }}"
@@ -61,7 +64,7 @@ jobs:
             BREVO_SENDER_EMAIL="${{ secrets.BREVO_SENDER_EMAIL }}"
             EOF
             
-            # Setup venv jika belum ada
+            # Initialize virtual environment if not present
             if [ ! -d "venv" ]; then
               python3 -m venv venv
             fi
@@ -69,7 +72,26 @@ jobs:
             ./venv/bin/pip install --upgrade pip
             ./venv/bin/pip install -r requirements.txt
 
+            # Restart or start the application via PM2
             ENV_STATE=${{ github.ref_name }} pm2 restart $NAME || \
-            ENV_STATE=${{ github.ref_name }} pm2 start "venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
+            ENV_STATE=${{ github.ref_name }} pm2 start "./venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
             
+            # Post-deployment validation
+            echo "⏳ Initiating application health check on port $PORT..."
+            sleep 5
+            
+            STATUS=$(pm2 jlist | jq -r ".[] | select(.name==\"$NAME\") | .pm2_env.status")
+            if [ "$STATUS" != "online" ]; then
+                echo "❌ Deployment failed: PM2 process status is '$STATUS'."
+                pm2 logs $NAME --lines 50 --no-daemon & sleep 5 && kill $!
+                exit 1
+            fi
+
+            if ! curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/docs | grep -q "200"; then
+                echo "❌ Deployment failed: API health check did not return HTTP 200 OK."
+                pm2 logs $NAME --lines 50 --no-daemon & sleep 5 && kill $!
+                exit 1
+            fi
+
+            echo "✅ Deployment completed successfully. Application is operating nominally."
             pm2 save

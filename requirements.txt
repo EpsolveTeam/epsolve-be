@@ -7,6 +7,7 @@ python-multipart==0.0.9
 loguru==0.7.3
 passlib==1.7.4
 pgvector==0.3.6
+psycopg2-binary==2.9.9
 pydantic==2.13.3
 pydantic_settings==2.14.0
 email-validator==2.2.0
