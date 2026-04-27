@@ -11,6 +11,7 @@ class UserRole(str, Enum):
     KARYAWAN = "karyawan"
     HELPDESK = "helpdesk"
     ADMIN = "admin"
+    MANAGER = "manager"
 
 
 class User(SQLModel, table=True):
