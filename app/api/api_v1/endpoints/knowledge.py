@@ -67,14 +67,9 @@ def create_knowledge(
 @router.get("/", response_model=List[KnowledgeResponse])
 def get_all_knowledge(
     category: Optional[str] = Query(None, description="Filter kategori"),
-<<<<<<< HEAD
     division: Optional[str] = Query(None, description="Filter divisi"),
-    db: Session = Depends(get_session)
-=======
-    product_type: Optional[str] = Query(None, description="Filter jenis produk"),
     db: Session = Depends(get_session),
     current_user: User = Depends(require_karyawan),
->>>>>>> 9864875b3d1b3cd97b4244a02420719752d22154
 ):
     """
     Endpoint untuk READ semua data Knowledge Base.
@@ -85,15 +80,8 @@ def get_all_knowledge(
     query = db.query(KnowledgeBase)
     if category:
         query = query.filter(KnowledgeBase.category == category)
-<<<<<<< HEAD
     if division:
         query = query.filter(KnowledgeBase.division == division) 
-        
-=======
-    if product_type:
-        query = query.filter(KnowledgeBase.product_type == product_type)
-
->>>>>>> 9864875b3d1b3cd97b4244a02420719752d22154
     return query.all()
 
 
