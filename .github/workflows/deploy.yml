@@ -73,7 +73,7 @@ jobs:
             ./venv/bin/pip install -r requirements.txt
 
             # Restart or start the application via PM2
-            ENV_STATE=${{ github.ref_name }} pm2 restart $NAME || \
+            pm2 delete $NAME || true
             ENV_STATE=${{ github.ref_name }} pm2 start "./venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT" --name $NAME
             
             # Post-deployment validation
