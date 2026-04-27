@@ -70,12 +70,22 @@ def create_ticket(
 
         logger.success(f"Tiket #{new_ticket.id} berhasil disimpan.")
 
-        send_ticket_notification(
-            ticket_id=new_ticket.id,
-            user_email=new_ticket.user_email,
-            subject=new_ticket.subject,
-            description=new_ticket.description
-        )
+        admins = db.query(User).filter(
+            User.role.in_([UserRole.ADMIN, UserRole.HELPDESK])
+        ).all()
+        
+        admin_emails = [admin.email for admin in admins]
+
+        if admin_emails:
+            send_ticket_notification(
+                admin_emails=admin_emails,
+                ticket_id=new_ticket.id,
+                user_email=new_ticket.user_email,
+                subject=new_ticket.subject,
+                description=new_ticket.description
+            )
+        else:
+            logger.warning("Tiket dibuat, tapi tidak ada Admin/Helpdesk ditemukan di DB untuk dikirimi notifikasi.")
 
         return {
             "message": "Tiket berhasil dibuat dan notifikasi telah dikirim",
@@ -85,7 +95,8 @@ def create_ticket(
 
     except Exception as e:
         logger.error(f"Gagal memproses tiket: {str(e)}")
-        raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server saat memproses tiket")
+        db.rollback() 
+        raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server")
 
 
 @router.get("/")

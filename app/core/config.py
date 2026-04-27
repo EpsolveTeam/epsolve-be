@@ -13,7 +13,6 @@ class Settings(BaseSettings):
 
     BREVO_API_KEY: str
     BREVO_SENDER_EMAIL: str
-    MAIL_TO: str
 
     SECRET_KEY: str
     ALGORITHM: str = "HS256"

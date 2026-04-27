@@ -31,27 +31,23 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str):
 BASE_STYLE = "background-color: #f9f9fb; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;"
 CARD_STYLE = "max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 16px; border: 1px solid #eef0f2; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);"
 
-def send_ticket_notification(ticket_id: int, user_email: str, subject: str, description: str):
-    """Trigger email: Saat Karyawan membuat tiket baru (Dikirim ke Admin)."""
+def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email: str, subject: str, description: str):
+    """Trigger email: Dikirim ke SEMUA Admin/Helpdesk yang ada di DB."""
     html_content = f"""
     <div style="{BASE_STYLE}">
         <div style="{CARD_STYLE}">
-            <h2 style="color: #111827; margin-top: 0; font-size: 24px; letter-spacing: -0.5px;">Notifikasi Tiket Baru</h2>
-            <p style="color: #6b7280; font-size: 15px; margin-bottom: 30px;">Sistem mendeteksi eskalasi tiket baru dari pengguna.</p>
-
-            <div style="text-align: left; background-color: #f8fafc; padding: 24px; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 30px;">
-                <p style="margin: 0 0 10px 0; color: #374151; font-size: 14px;"><strong>ID Tiket:</strong> <span style="color: #0051C3;">#{ticket_id}</span></p>
-                <p style="margin: 0 0 10px 0; color: #374151; font-size: 14px;"><strong>Pengirim:</strong> {user_email}</p>
-                <p style="margin: 15px 0 0 0; color: #374151; font-size: 14px; border-top: 1px solid #e2e8f0; padding-top: 15px;"><strong>Deskripsi Masalah:</strong><br><span style="color: #4b5563; line-height: 1.6; display: inline-block; margin-top: 5px;">{description}</span></p>
+            <h2 style="color: #111827;">Notifikasi Tiket Baru</h2>
             </div>
-
-            <p style="color: #9ca3af; font-size: 13px; margin: 0;">Mohon segera tindak lanjuti melalui Dashboard Admin.</p>
-        </div>
     </div>
     """
     try:
-        send_email_via_brevo(to_email=settings.MAIL_TO, subject=f"[NEW TICKET #{ticket_id}] {subject}", html_content=html_content)
-        logger.info(f"Email notifikasi tiket #{ticket_id} berhasil dikirim")
+        for email in admin_emails:
+            send_email_via_brevo(
+                to_email=email, 
+                subject=f"[NEW TICKET #{ticket_id}] {subject}", 
+                html_content=html_content
+            )
+        logger.info(f"Email notifikasi tiket #{ticket_id} dikirim ke {len(admin_emails)} admin")
     except Exception as e:
         logger.error(f"Gagal kirim notif tiket: {e}")
 
