@@ -9,8 +9,8 @@ from loguru import logger
 from app.db.session import get_session
 from app.models.chat_log import ChatLog
 from sqlalchemy import desc
-from app.core.dependencies import get_current_user
-from app.models.user import User
+from app.core.dependencies import get_current_user, require_karyawan
+from app.models.user import User, UserRole
 # from app.models.knowledge import KnowledgeBase # [TODO] Model untuk knowledge base (pgvector)
 
 router = APIRouter()
@@ -22,11 +22,15 @@ class ChatMessageRequest(BaseModel):
     image_query_url: Optional[str] = None
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def chat_with_bot(chat_in: ChatMessageRequest, db: Session = Depends(get_session)):
+def chat_with_bot(
+    chat_in: ChatMessageRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_karyawan),
+):
     """
     Endpoint untuk mengirim pesan ke chatbot
     """
-    logger.info(f"Menerima chat dari User ID {chat_in.user_id} | Session: {chat_in.session_id}")
+    logger.info(f"Menerima chat dari {current_user.email} | Session: {chat_in.session_id}")
     
     try:
         # =====================================================================
@@ -77,18 +81,28 @@ def chat_with_bot(chat_in: ChatMessageRequest, db: Session = Depends(get_session
         raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server saat memproses chat")
 
 @router.get("/history/{session_id}", response_model=List[ChatLog])
-def get_chat_history(session_id: str, db: Session = Depends(get_session)):
+def get_chat_history(
+    session_id: str,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_karyawan),
+):
     """
     Endpoint untuk mengambil riwayat percakapan berdasarkan Session ID.
+    Karyawan hanya bisa akses sesi miliknya sendiri; admin bisa akses semua.
     """
     logger.info(f"Mengambil riwayat chat untuk session_id: {session_id}")
-    
-    chat_history = db.query(ChatLog).filter(ChatLog.session_id == session_id).order_by(ChatLog.created_at.asc()).all()
-    
+
+    query = db.query(ChatLog).filter(ChatLog.session_id == session_id)
+
+    if current_user.role != UserRole.ADMIN:
+        query = query.filter(ChatLog.user_id == current_user.id)
+
+    chat_history = query.order_by(ChatLog.created_at.asc()).all()
+
     if not chat_history:
         logger.warning(f"Riwayat chat tidak ditemukan untuk session_id: {session_id}")
         return []
-        
+
     return chat_history
 
 class ChatSessionItem(BaseModel):
