@@ -196,8 +196,8 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
     if download_url:
         download_section = f'''
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
-            <a href="{download_url}" target="_blank" style="{button_style}">📥 Download Laporan Excel</a>
-            <p style="color: #9ca3af; font-size: 12px; margin-top: 15px; margin-bottom: 0;">Link aktif selama 7 hari. Klik tombol di atas untuk mengunduh file Excel lengkap tanpa login.</p>
+            <a href="{download_url}" target="_blank" style="{button_style}">Download File Laporan</a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 15px; margin-bottom: 0;">Link aktif selama 7 hari. Klik tombol di atas untuk mengunduh file.</p>
         </div>
         '''
     else:
@@ -237,7 +237,6 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
 
             {download_section}
 
-            <p style="color: #9ca3af; font-size: 13px; margin-top: 40px;">Buka Dashboard Admin untuk analisis lebih mendalam.</p>
         </div>
     </div>
     """
