@@ -1,15 +1,18 @@
 import requests
-import base64
 import io
 import pandas as pd
-from sqlalchemy.orm import Session
+import uuid
+from datetime import datetime
 from sqlmodel import create_engine, Session as SQLModelSession
+from supabase import create_client, Client
 from app.core.config import settings
 from loguru import logger
 from app.models.ticket import Ticket
 
-# Create engine for email background tasks (Excel generation)
 engine = create_engine(settings.DATABASE_URL, echo=False, pool_pre_ping=True)
+
+supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+REPORTS_BUCKET = "helpdesk-files"
 
 BASE_STYLE = "background-color: #f9f9fb; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;"
 CARD_STYLE = "max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 16px; border: 1px solid #eef0f2; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);"
@@ -92,15 +95,15 @@ def send_resolution_email(ticket_id: int, user_email: str, subject: str, solutio
         logger.error(f"Gagal kirim email resolusi: {e}")
 
 
-def generate_analytics_excel(db: Session = None) -> bytes:
+def generate_analytics_excel() -> bytes:
     """Generate Excel report from all tickets and return as bytes."""
     close_session = False
-    if db is None:
-        db = SQLModelSession(engine)
-        close_session = True
+    db = SQLModelSession(engine)
+    close_session = True
     
     try:
         tickets = db.query(Ticket).all()
+        logger.info(f"Generating Excel with {len(tickets)} tickets")
         
         data = []
         for t in tickets:
@@ -120,14 +123,22 @@ def generate_analytics_excel(db: Session = None) -> bytes:
             df.to_excel(writer, index=False, sheet_name='Report Tiket')
         
         output.seek(0)
-        return output.getvalue()
+        excel_bytes = output.getvalue()
+        logger.info(f"Excel generated successfully, size: {len(excel_bytes)} bytes")
+        return excel_bytes
+    except Exception as e:
+        logger.error(f"Failed to generate Excel: {e}")
+        raise
     finally:
         if close_session:
             db.close()
 
 
 def send_analytics_report_email(user_email: str, user_name: str, report_data: dict):
-    """Trigger email: Mengirim laporan Analytics ke Admin/Manajer dengan lampiran Excel."""
+    """
+    Mengirim laporan Analytics ke Admin/Manajer dengan link download Excel.
+    Generate Excel → Upload ke Supabase → Kirim email dengan signed URL.
+    """
     metrics = report_data.get("ticket_metrics", {})
     chats = report_data.get("chatbot_metrics", {})
     
@@ -140,6 +151,62 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
             <td style="padding: 12px 0; color: #4b5563; font-size: 14px; border-bottom: 1px solid #f1f5f9;">{item.get('category', 'Unknown')}</td>
             <td style="padding: 12px 0; color: #0051C3; font-size: 14px; font-weight: bold; text-align: right; border-bottom: 1px solid #f1f5f9;">{item.get('count', 0)}</td>
         </tr>"""
+
+    button_style = "display: inline-block; background-color: #0051C3; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; margin-top: 20px;"
+
+    download_url = None
+    try:
+        excel_bytes = generate_analytics_excel()
+        logger.info(f"Excel generated: {len(excel_bytes)} bytes")
+        
+        try:
+            buckets = supabase.storage.list_buckets()
+            bucket_exists = any(bucket.name == REPORTS_BUCKET for bucket in buckets)
+            if not bucket_exists:
+                supabase.storage.create_bucket(REPORTS_BUCKET, {"public": False})
+                logger.info(f"Created Supabase bucket: {REPORTS_BUCKET}")
+        except Exception as e:
+            logger.warning(f"Bucket check failed (may exist): {e}")
+        
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"report_analytics_epsolve_{timestamp}_{unique_id}.xlsx"
+        file_path = f"analytics/{filename}"
+        
+        supabase.storage.from_(REPORTS_BUCKET).upload(
+            path=file_path,
+            file=excel_bytes,
+            file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+        )
+        logger.info(f"Excel uploaded to Supabase: {file_path}")
+        
+        signed_url_response = supabase.storage.from_(REPORTS_BUCKET).create_signed_url(
+            path=file_path,
+            expires_in=604800
+        )
+        download_url = signed_url_response.get('signedURL') or signed_url_response.get('signed_url')
+        if not download_url:
+            raise ValueError(f"No signed URL in response: {signed_url_response}")
+        logger.info(f"Signed URL generated: {download_url}")
+        
+    except Exception as e:
+        logger.error(f"Failed to prepare Excel/upload: {e}")
+        download_url = None
+
+    if download_url:
+        download_section = f'''
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+            <a href="{download_url}" target="_blank" style="{button_style}">📥 Download Laporan Excel</a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 15px; margin-bottom: 0;">Link aktif selama 7 hari. Klik tombol di atas untuk mengunduh file Excel lengkap tanpa login.</p>
+        </div>
+        '''
+    else:
+        download_section = '''
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+            <p style="color: #ef4444; font-size: 14px; font-weight: bold;">⚠️ Gagal menyiapkan laporan Excel</p>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 10px; margin-bottom: 0;">Silakan hubungi administrator atau coba lagi nanti.</p>
+        </div>
+        '''
 
     html_content = f"""
     <div style="{BASE_STYLE}">
@@ -168,10 +235,7 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
                 </table>
             </div>
 
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
-                <p style="color: #6b7280; font-size: 15px;">📎 Laporan Excel dilewatkan sebagai attachment pada email ini.</p>
-                <p style="color: #9ca3af; font-size: 12px; margin-top: 10px; margin-bottom: 0;">File berisi data tiket lengkap untuk analisis lebih lanjut.</p>
-            </div>
+            {download_section}
 
             <p style="color: #9ca3af; font-size: 13px; margin-top: 40px;">Buka Dashboard Admin untuk analisis lebih mendalam.</p>
         </div>
@@ -179,13 +243,7 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
     """
     
     try:
-        excel_bytes = generate_analytics_excel(db=None)
-        excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
-        attachments = [{
-            "name": "report_analytics_epsolve.xlsx",
-            "content": excel_base64
-        }]
-        send_email_via_brevo(to_email=user_email, subject="📊 Ringkasan Laporan Helpdesk Epsolve", html_content=html_content, attachments=attachments)
-        logger.info(f"Email laporan analytics berhasil dikirim ke {user_email} dengan attachment Excel")
+        send_email_via_brevo(to_email=user_email, subject="📊 Ringkasan Laporan Helpdesk Epsolve", html_content=html_content)
+        logger.info(f"Email laporan analytics berhasil dikirim ke {user_email}")
     except Exception as e:
         logger.error(f"Gagal kirim email laporan: {e}")

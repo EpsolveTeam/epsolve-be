@@ -11,7 +11,7 @@ import pandas as pd
 import io
 
 from app.models.user import User, UserRole
-from app.core.dependencies import require_admin
+from app.core.dependencies import require_admin, require_role
 from app.db.session import get_session
 from app.models.ticket import Ticket
 from app.models.chat_log import ChatLog 
@@ -82,7 +82,7 @@ def get_dashboard_summary(
 @router.get("/export-excel")
 def export_analytics_to_excel(
     db: Session = Depends(get_session),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.MANAGER))
 ):
     """
     Administrator mendownload report (Excel).
