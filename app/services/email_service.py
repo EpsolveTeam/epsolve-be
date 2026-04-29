@@ -1,8 +1,21 @@
 import requests
+import base64
+import io
+import pandas as pd
+from sqlalchemy.orm import Session
+from sqlmodel import create_engine, Session as SQLModelSession
 from app.core.config import settings
 from loguru import logger
+from app.models.ticket import Ticket
 
-def send_email_via_brevo(to_email: str, subject: str, html_content: str):
+# Create engine for email background tasks (Excel generation)
+engine = create_engine(settings.DATABASE_URL, echo=False, pool_pre_ping=True)
+
+BASE_STYLE = "background-color: #f9f9fb; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;"
+CARD_STYLE = "max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 16px; border: 1px solid #eef0f2; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);"
+
+
+def send_email_via_brevo(to_email: str, subject: str, html_content: str, attachments: list = None):
     """Fungsi inti untuk menembak API Brevo."""
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
@@ -19,6 +32,8 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str):
         "subject": subject,
         "htmlContent": html_content
     }
+    if attachments:
+        payload["attachments"] = attachments
     try:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code not in [200, 201, 202]:
@@ -28,8 +43,6 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str):
         logger.error(f"Error HTTP Request ke Brevo: {str(e)}")
         raise e
 
-BASE_STYLE = "background-color: #f9f9fb; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;"
-CARD_STYLE = "max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 16px; border: 1px solid #eef0f2; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);"
 
 def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email: str, subject: str, description: str):
     """Trigger email: Dikirim ke SEMUA Admin/Helpdesk yang ada di DB."""
@@ -50,6 +63,7 @@ def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email
         logger.info(f"Email notifikasi tiket #{ticket_id} dikirim ke {len(admin_emails)} admin")
     except Exception as e:
         logger.error(f"Gagal kirim notif tiket: {e}")
+
 
 def send_resolution_email(ticket_id: int, user_email: str, subject: str, solution: str):
     """Trigger email: Saat Admin membalas tiket (Dikirim ke Karyawan)."""
@@ -77,8 +91,43 @@ def send_resolution_email(ticket_id: int, user_email: str, subject: str, solutio
     except Exception as e:
         logger.error(f"Gagal kirim email resolusi: {e}")
 
+
+def generate_analytics_excel(db: Session = None) -> bytes:
+    """Generate Excel report from all tickets and return as bytes."""
+    close_session = False
+    if db is None:
+        db = SQLModelSession(engine)
+        close_session = True
+    
+    try:
+        tickets = db.query(Ticket).all()
+        
+        data = []
+        for t in tickets:
+            data.append({
+                "ID Tiket": t.id,
+                "Email User": t.user_email,
+                "Subjek": t.subject,
+                "Kategori": t.category,
+                "Divisi": t.division,
+                "Status": t.status,
+                "Tanggal Dibuat": t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else ""
+            })
+        
+        df = pd.DataFrame(data)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Report Tiket')
+        
+        output.seek(0)
+        return output.getvalue()
+    finally:
+        if close_session:
+            db.close()
+
+
 def send_analytics_report_email(user_email: str, user_name: str, report_data: dict):
-    """Trigger email: Mengirim laporan Analytics ke Admin/Manajer."""
+    """Trigger email: Mengirim laporan Analytics ke Admin/Manajer dengan lampiran Excel."""
     metrics = report_data.get("ticket_metrics", {})
     chats = report_data.get("chatbot_metrics", {})
     
@@ -119,12 +168,24 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
                 </table>
             </div>
 
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+                <p style="color: #6b7280; font-size: 15px;">📎 Laporan Excel dilewatkan sebagai attachment pada email ini.</p>
+                <p style="color: #9ca3af; font-size: 12px; margin-top: 10px; margin-bottom: 0;">File berisi data tiket lengkap untuk analisis lebih lanjut.</p>
+            </div>
+
             <p style="color: #9ca3af; font-size: 13px; margin-top: 40px;">Buka Dashboard Admin untuk analisis lebih mendalam.</p>
         </div>
     </div>
     """
+    
     try:
-        send_email_via_brevo(to_email=user_email, subject="📊 Ringkasan Laporan Helpdesk Epsolve", html_content=html_content)
-        logger.info(f"Email laporan analytics berhasil dikirim ke {user_email}")
+        excel_bytes = generate_analytics_excel(db=None)
+        excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
+        attachments = [{
+            "name": "report_analytics_epsolve.xlsx",
+            "content": excel_base64
+        }]
+        send_email_via_brevo(to_email=user_email, subject="📊 Ringkasan Laporan Helpdesk Epsolve", html_content=html_content, attachments=attachments)
+        logger.info(f"Email laporan analytics berhasil dikirim ke {user_email} dengan attachment Excel")
     except Exception as e:
         logger.error(f"Gagal kirim email laporan: {e}")
