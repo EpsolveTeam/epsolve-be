@@ -10,31 +10,8 @@ from app.models.user import User
 from app.core.dependencies import require_karyawan, require_admin
 from app.services.embedding_service import get_embedding
 from app.schemas.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeUpdate
-from app.schemas.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeUpdate
 
 router = APIRouter()
-
-class KnowledgeCreate(BaseModel):
-    title: str    
-    content: str     
-    category: str      
-    division: str      
-
-class KnowledgeResponse(BaseModel):
-    id: int
-    title: str
-    content: str
-    category: str
-    division: str
-    source_url: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime 
-
-    class Config:
-        from_attributes = True
-
-class KnowledgeUpdate(BaseModel):
-    content: Optional[str] = None
 
 @router.post("/", response_model=KnowledgeResponse, status_code=status.HTTP_201_CREATED)
 def create_knowledge(
