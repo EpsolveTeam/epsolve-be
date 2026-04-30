@@ -26,7 +26,7 @@ def get_dashboard_summary(
 ):
     """
     Mengambil data ringkasan untuk dashboard Admin secara lengkap sesuai desain UI baru.
-    Mendukung filter waktu, perbandingan tren (%), dan rata-rata waktu penyelesaian.
+    Menghandle insight text (Meningkat/Menurun) langsung dari backend (BFF Pattern).
     """
     logger.info(f"Admin {current_user.email} mengakses Analytics Dashboard (Periode: {period}).")
     
@@ -43,52 +43,78 @@ def get_dashboard_summary(
         start_current = now - timedelta(days=days)
         start_previous = start_current - timedelta(days=days)
 
-        def calculate_trend(current, previous):
+        # Helper function BARU untuk format UI Insight
+        def get_trend_details(current, previous):
             if previous == 0:
-                return 100.0 if current > 0 else 0.0
-            return round(((current - previous) / previous) * 100, 1)
+                trend_value = 100.0 if current > 0 else 0.0
+            else:
+                trend_value = round(((current - previous) / previous) * 100, 1)
 
+            if trend_value > 0:
+                text = f"Meningkat {trend_value}% dibanding periode sebelumnya"
+                direction = "up"
+            elif trend_value < 0:
+                text = f"Menurun {abs(trend_value)}% dibanding periode sebelumnya"
+                direction = "down"
+            else:
+                text = "Stabil dibanding periode sebelumnya"
+                direction = "flat"
+
+            return {
+                "value": trend_value,   # Untuk angka di pojok kanan atas (+ / -)
+                "text": text,           # Untuk insight text di bawah angka utama
+                "direction": direction  # Membantu Frontend menentukan warna (Merah/Hijau/Abu)
+            }
+
+        # ==========================================
+        # METRIK TIKET HELPDESK
+        # ==========================================
         current_tickets = db.query(Ticket).filter(Ticket.created_at >= start_current).all()
-        prev_tickets_count = db.query(Ticket).filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current).count()
+        prev_tickets = db.query(Ticket).filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current).all()
         
         total_tickets_current = len(current_tickets)
-        ticket_trend = calculate_trend(total_tickets_current, prev_tickets_count)
+        prev_tickets_count = len(prev_tickets)
+        ticket_trend = get_trend_details(total_tickets_current, prev_tickets_count)
 
+        # Resolusi Bulan Ini
         resolved_tickets = [t for t in current_tickets if t.status in ["closed", "answered"]]
         resolved_count = len(resolved_tickets)
         resolution_rate = round((resolved_count / total_tickets_current * 100), 1) if total_tickets_current > 0 else 0
 
-        prev_resolved_count = db.query(Ticket).filter(
-            Ticket.created_at >= start_previous, 
-            Ticket.created_at < start_current,
-            Ticket.status.in_(["closed", "answered"])
-        ).count()
+        # Resolusi Bulan Sebelumnya
+        prev_resolved_tickets = [t for t in prev_tickets if t.status in ["closed", "answered"]]
+        prev_resolved_count = len(prev_resolved_tickets)
         prev_resolution_rate = round((prev_resolved_count / prev_tickets_count * 100), 1) if prev_tickets_count > 0 else 0
-        ticket_resolution_trend = calculate_trend(resolution_rate, prev_resolution_rate)
-
-        total_seconds = 0
-        for t in resolved_tickets:
-            if t.updated_at and t.created_at:
-                total_seconds += (t.updated_at - t.created_at).total_seconds()
         
-        avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
-        avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds))) # Format HH:MM:SS
+        ticket_resolution_trend = get_trend_details(resolution_rate, prev_resolution_rate)
 
+        # Rata-rata Waktu Penyelesaian (Bulan Ini)
+        total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in resolved_tickets if t.updated_at and t.created_at)
+        avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
+        avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
+
+        # Rata-rata Waktu Penyelesaian (Bulan Sebelumnya untuk cari Trend)
+        prev_total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in prev_resolved_tickets if t.updated_at and t.created_at)
+        prev_avg_resolution_seconds = prev_total_seconds / prev_resolved_count if prev_resolved_count > 0 else 0
+        avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds)
+
+        # ==========================================
+        # METRIK CHATBOT
+        # ==========================================
         current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
         prev_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).count()
-        chat_trend = calculate_trend(current_chats, prev_chats)
+        chat_trend = get_trend_details(current_chats, prev_chats)
 
         resolved_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current, ChatLog.is_resolved == True).count()
         chat_resolution_rate = round((resolved_chats / current_chats * 100), 1) if current_chats > 0 else 0
 
-        prev_resolved_chats = db.query(ChatLog).filter(
-            ChatLog.created_at >= start_previous, 
-            ChatLog.created_at < start_current,
-            ChatLog.is_resolved == True
-        ).count()
+        prev_resolved_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current, ChatLog.is_resolved == True).count()
         prev_chat_resolution_rate = round((prev_resolved_chats / prev_chats * 100), 1) if prev_chats > 0 else 0
-        chat_resolution_trend = calculate_trend(chat_resolution_rate, prev_chat_resolution_rate)
+        chat_resolution_trend = get_trend_details(chat_resolution_rate, prev_chat_resolution_rate)
 
+        # ==========================================
+        # CHART & FREKUENSI
+        # ==========================================
         daily_stats_query = (
             db.query(
                 func.date(Ticket.created_at).label('date'),
@@ -109,7 +135,6 @@ def get_dashboard_summary(
         problem_frequency = []
         for cat, count in category_counts:
             chat_count_estimation = count * 3 
-            
             problem_frequency.append({
                 "category": cat,
                 "ticket_count": count,
@@ -131,6 +156,7 @@ def get_dashboard_summary(
                 "resolution_rate": resolution_rate,
                 "resolution_trend": ticket_resolution_trend,
                 "avg_resolution_time": avg_resolution_time,
+                "avg_resolution_time_trend": avg_time_trend # BARU: Untuk UI Rata-rata waktu
             },
             "chart_data": chart_data,
             "problem_frequency": problem_frequency
@@ -139,7 +165,6 @@ def get_dashboard_summary(
     except Exception as e:
         logger.error(f"Gagal mengambil data analytics: {str(e)}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan saat menghitung data analytics")
-    
 
 @router.get("/export-excel")
 def export_analytics_to_excel(
