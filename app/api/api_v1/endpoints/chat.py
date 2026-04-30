@@ -14,7 +14,6 @@ from app.core.dependencies import get_current_user, require_karyawan
 from app.services.rag_service import RAGService
 from app.core.config import settings
 
-# Supabase client for storage
 from supabase import create_client, Client
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
@@ -24,43 +23,34 @@ class RAGResponse(BaseModel):
     answer: str
     sources: List[dict]
 
-MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
-
-MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_IMAGE_SIZE = 10 * 1024 * 1024 
 
 async def upload_image_to_supabase(image: UploadFile, user_id: UUID, session_id: str) -> str:
     """Upload image to Supabase Storage and return public URL."""
-    # Read content
     content = await image.read()
     if not content:
         raise HTTPException(status_code=400, detail="Image file is empty")
     
-    # Validate size (max 10 MB)
     if len(content) > MAX_IMAGE_SIZE:
         raise HTTPException(
             status_code=400,
             detail=f"Image file too large. Maximum size is {MAX_IMAGE_SIZE // (1024*1024)} MB"
         )
 
-    # Determine file extension
     filename = image.filename or "image.jpg"
     ext = os.path.splitext(filename)[1] or ".jpg"
-    # Unique path: {user_id}/{session_id}/{uuid4}{ext}
-    # Ensure all parts are strings
     user_id_str = str(user_id)
     session_id_str = str(session_id)
     unique_name = str(uuid4())
     storage_path = f"{user_id_str}/{session_id_str}/{unique_name}{ext}"
 
     try:
-        # Upload to Supabase Storage (bucket: chat-images)
         supabase.storage.from_("chat-images").upload(
             path=storage_path,
             file=content,
             file_options={"content-type": image.content_type or "image/jpeg"}
         )
 
-        # Get public URL (if bucket is public)
         public_url = supabase.storage.from_("chat-images").get_public_url(storage_path)
         return public_url
     except Exception as e:
@@ -82,17 +72,14 @@ async def chat_with_bot(
     logger.info(f"Menerima chat dari {current_user.email} | Session: {session_id}")
 
     try:
-        # Process image upload if provided
         image_url = None
         if image:
             logger.info("Image detected, uploading to Supabase Storage...")
             image_url = await upload_image_to_supabase(image, current_user.id, session_id)
             logger.info(f"Image uploaded: {image_url}")
 
-        # Initialize RAG service
         rag = RAGService(db=db)
 
-        # Run RAG query (with image_url if available)
         rag_result = await rag.query(
             query=user_query,
             limit=5,
@@ -102,7 +89,6 @@ async def chat_with_bot(
         answer = rag_result["answer"]
         sources = rag_result["sources"]
 
-        # Save to ChatLog
         new_chat_log = ChatLog(
             session_id=session_id,
             user_id=current_user.id,

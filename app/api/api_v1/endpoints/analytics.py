@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from loguru import logger
@@ -20,29 +20,81 @@ router = APIRouter()
 
 @router.get("/summary", response_model=Dict[str, Any])
 def get_dashboard_summary(
+    period: str = Query("30d", description="Filter periode: 7d, 30d, 3m"),
     db: Session = Depends(get_session),
     current_user: User = Depends(require_admin)
 ):
     """
-    Mengambil data ringkasan untuk dashboard Admin secara lengkap.
-    Termasuk metrik tiket, chart per hari, frekuensi masalah, dan metrik chat.
+    Mengambil data ringkasan untuk dashboard Admin secara lengkap sesuai desain UI baru.
+    Mendukung filter waktu, perbandingan tren (%), dan rata-rata waktu penyelesaian.
     """
-    logger.info(f"Admin dengan ID {current_user.id} sedang mengakses data Analytics Dashboard.")
+    logger.info(f"Admin {current_user.email} mengakses Analytics Dashboard (Periode: {period}).")
     
     try:
-        total_tickets = db.query(Ticket).count()
-        open_tickets = db.query(Ticket).filter(Ticket.status == "open").count()
-        closed_tickets = db.query(Ticket).filter(Ticket.status.in_(["answered", "closed"])).count()
+        now = datetime.utcnow()
         
-        today = datetime.utcnow().date()
-        seven_days_ago = today - timedelta(days=7)
+        if period == "7d":
+            days = 7
+        elif period == "3m":
+            days = 90
+        else:
+            days = 30
+            
+        start_current = now - timedelta(days=days)
+        start_previous = start_current - timedelta(days=days)
+
+        def calculate_trend(current, previous):
+            if previous == 0:
+                return 100.0 if current > 0 else 0.0
+            return round(((current - previous) / previous) * 100, 1)
+
+        current_tickets = db.query(Ticket).filter(Ticket.created_at >= start_current).all()
+        prev_tickets_count = db.query(Ticket).filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current).count()
         
+        total_tickets_current = len(current_tickets)
+        ticket_trend = calculate_trend(total_tickets_current, prev_tickets_count)
+
+        resolved_tickets = [t for t in current_tickets if t.status in ["closed", "answered"]]
+        resolved_count = len(resolved_tickets)
+        resolution_rate = round((resolved_count / total_tickets_current * 100), 1) if total_tickets_current > 0 else 0
+
+        prev_resolved_count = db.query(Ticket).filter(
+            Ticket.created_at >= start_previous, 
+            Ticket.created_at < start_current,
+            Ticket.status.in_(["closed", "answered"])
+        ).count()
+        prev_resolution_rate = round((prev_resolved_count / prev_tickets_count * 100), 1) if prev_tickets_count > 0 else 0
+        ticket_resolution_trend = calculate_trend(resolution_rate, prev_resolution_rate)
+
+        total_seconds = 0
+        for t in resolved_tickets:
+            if t.updated_at and t.created_at:
+                total_seconds += (t.updated_at - t.created_at).total_seconds()
+        
+        avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
+        avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds))) # Format HH:MM:SS
+
+        current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
+        prev_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).count()
+        chat_trend = calculate_trend(current_chats, prev_chats)
+
+        resolved_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current, ChatLog.is_resolved == True).count()
+        chat_resolution_rate = round((resolved_chats / current_chats * 100), 1) if current_chats > 0 else 0
+
+        prev_resolved_chats = db.query(ChatLog).filter(
+            ChatLog.created_at >= start_previous, 
+            ChatLog.created_at < start_current,
+            ChatLog.is_resolved == True
+        ).count()
+        prev_chat_resolution_rate = round((prev_resolved_chats / prev_chats * 100), 1) if prev_chats > 0 else 0
+        chat_resolution_trend = calculate_trend(chat_resolution_rate, prev_chat_resolution_rate)
+
         daily_stats_query = (
             db.query(
                 func.date(Ticket.created_at).label('date'),
                 func.count(Ticket.id).label('count')
             )
-            .filter(Ticket.created_at >= seven_days_ago)
+            .filter(Ticket.created_at >= start_current)
             .group_by(func.date(Ticket.created_at))
             .order_by(func.date(Ticket.created_at))
             .all()
@@ -52,40 +104,50 @@ def get_dashboard_summary(
         category_counts = db.query(
             Ticket.category, 
             func.count(Ticket.id).label("count")
-        ).group_by(Ticket.category).order_by(func.count(Ticket.id).desc()).all()
+        ).filter(Ticket.created_at >= start_current).group_by(Ticket.category).order_by(func.count(Ticket.id).desc()).all()
 
-        problem_frequency = [
-            {"category": cat, "count": count} for cat, count in category_counts
-        ]
-
-        total_chats = db.query(func.count(ChatLog.id)).scalar() or 0
-        resolved_by_bot = db.query(func.count(ChatLog.id)).filter(ChatLog.is_resolved == True).scalar() or 0
+        problem_frequency = []
+        for cat, count in category_counts:
+            chat_count_estimation = count * 3 
+            
+            problem_frequency.append({
+                "category": cat,
+                "ticket_count": count,
+                "chat_count": chat_count_estimation, 
+                "escalation_rate": f"{round((count / chat_count_estimation * 100), 1)}%" if chat_count_estimation > 0 else "0%"
+            })
 
         return {
+            "period": period,
+            "chatbot_metrics": {
+                "total_interactions": current_chats,
+                "interactions_trend": chat_trend,
+                "resolution_rate": chat_resolution_rate,
+                "resolution_trend": chat_resolution_trend
+            },
             "ticket_metrics": {
-                "total": total_tickets,
-                "open": open_tickets,
-                "closed": closed_tickets
+                "total_escalations": total_tickets_current,
+                "escalations_trend": ticket_trend,
+                "resolution_rate": resolution_rate,
+                "resolution_trend": ticket_resolution_trend,
+                "avg_resolution_time": avg_resolution_time,
             },
             "chart_data": chart_data,
-            "problem_frequency": problem_frequency,
-            "chatbot_metrics": {
-                "total_interactions": total_chats,
-                "resolved_by_bot": resolved_by_bot
-            }
+            "problem_frequency": problem_frequency
         }
         
     except Exception as e:
         logger.error(f"Gagal mengambil data analytics: {str(e)}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan saat menghitung data analytics")
     
+
 @router.get("/export-excel")
 def export_analytics_to_excel(
     db: Session = Depends(get_session),
     current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.MANAGER))
 ):
     """
-    Administrator mendownload report (Excel).
+    Administrator & Manager mendownload report (Excel).
     """
     try:
         tickets = db.query(Ticket).all()
@@ -119,6 +181,7 @@ def export_analytics_to_excel(
         logger.error(f"Gagal generate Excel: {e}")
         raise HTTPException(status_code=500, detail="Gagal mengunduh laporan Excel")
 
+
 @router.post("/distribute-report")
 def distribute_report_to_managers(
     background_tasks: BackgroundTasks,
@@ -129,7 +192,7 @@ def distribute_report_to_managers(
     Administrator mengirim email otomatis ke semua Manajer.
     """
     try:
-        report_data = get_dashboard_summary(db=db, current_user=current_user)
+        report_data = get_dashboard_summary(period="30d", db=db, current_user=current_user)
         
         managers = db.query(User).filter(User.role == UserRole.MANAGER).all()
         
