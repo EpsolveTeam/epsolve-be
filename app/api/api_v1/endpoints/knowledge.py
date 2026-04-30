@@ -9,6 +9,8 @@ from app.models.knowledge import KnowledgeBase
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.core.dependencies import require_karyawan, require_admin
+from app.services.embedding_service import get_embedding
+from app.services.embedding_service import get_embedding
 
 router = APIRouter()
 
@@ -22,6 +24,7 @@ class KnowledgeResponse(BaseModel):
     title: str
     content: str
     category: str
+    source_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -40,23 +43,26 @@ def create_knowledge(
 ):
     """
     Endpoint untuk Admin menambahkan data Knowledge Base baru (Create).
+    Embedding akan di-generate otomatis dari konten.
     """
     logger.info(f"Admin {current_user.email} menambahkan knowledge base baru: {kb_in.title} ({kb_in.category})")
 
     try:
-        # TODO: integrasi fungsi OpenAI untuk mengubah 'kb_in.content' menjadi Vector (embedding)
+        # Generate embedding dari content
+        embedding = get_embedding(kb_in.content)
+
         new_kb = KnowledgeBase(
             title=kb_in.title,
             content=kb_in.content,
-            category=kb_in.category
-            # embedding=... (diisi modul AI)
+            category=kb_in.category,
+            embedding=embedding
         )
 
         db.add(new_kb)
         db.commit()
         db.refresh(new_kb)
 
-        logger.success(f"Knowledge Base ID #{new_kb.id} berhasil disimpan.")
+        logger.success(f"Knowledge Base ID #{new_kb.id} berhasil disimpan dengan embedding.")
         return new_kb
 
     except Exception as e:
@@ -133,6 +139,7 @@ def update_knowledge(
 ):
     """
     Endpoint untuk UPDATE data Knowledge Base.
+    Jika content berubah, embedding akan di-regenerate.
     """
     kb_data = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
 
@@ -143,7 +150,12 @@ def update_knowledge(
         kb_data.title = kb_in.title
     if kb_in.content is not None:
         kb_data.content = kb_in.content
-        # TODO: Jika content berubah, trigger ulang OpenAI untuk update 'embedding'-nya
+        # Regenerate embedding jika content berubah
+        try:
+            kb_data.embedding = get_embedding(kb_in.content)
+        except Exception as e:
+            logger.error(f"Failed to regenerate embedding: {e}")
+            raise HTTPException(status_code=500, detail="Gagal mengupdate embedding")
     if kb_in.category is not None:
         kb_data.category = kb_in.category
 
@@ -162,6 +174,7 @@ def create_kb_from_ticket(
 ):
     """
     Mengubah tiket yang sudah diselesaikan menjadi artikel Knowledge Base.
+    Embedding akan di-generate otomatis dari konten (description + admin_response).
     """
     logger.info(f"Admin {current_user.email} mengkonversi tiket #{ticket_id} menjadi Knowledge Base")
 
@@ -176,13 +189,18 @@ def create_kb_from_ticket(
         )
 
     kb_content = f"**Keluhan Pelanggan:**\n{ticket.description}\n\n**Solusi Helpdesk:**\n{ticket.admin_response}"
+    kb_title = ticket.subject or "Ticket Solution"
 
     try:
+        # Generate embedding dari content
+        embedding = get_embedding(kb_content)
+
         new_kb = KnowledgeBase(
-            title=ticket.subject,
+            title=kb_title,
             content=kb_content,
             category=ticket.category,
             division=ticket.division,
+            embedding=embedding
         )
 
         db.add(new_kb)

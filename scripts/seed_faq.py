@@ -1,7 +1,6 @@
 """
 Script to seed the KnowledgeBase with Epson FAQ data.
 Run: python scripts/seed_faq.py
-Requires: GOOGLE_API_KEY set in environment (for LLM, not used in seeding)
 """
 
 import json
@@ -11,18 +10,16 @@ from pathlib import Path
 from typing import List, Dict, Any
 from loguru import logger
 
-# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from sqlmodel import Session, create_engine
 from app.core.config import settings
 from app.models.knowledge import KnowledgeBase
-from app.services.rag_service import RAGService
+from app.services.embedding_service import get_embedding
 
-# Constants
 FAQ_JSON_PATH = project_root / "epson_allinoneprinter_faq_clean.json"
-BATCH_SIZE = 100  # Process in batches to manage memory
+BATCH_SIZE = 100
 
 
 def load_faq_data(json_path: Path) -> List[Dict[str, Any]]:
@@ -76,9 +73,6 @@ def seed_database(
     batch_size: int = BATCH_SIZE
 ) -> None:
     """Seed database with FAQ data, generating embeddings synchronously."""
-    # Initialize RAGService in embedding-only mode (no Gemini/L LLM needed)
-    rag_service = RAGService(db=None, use_llm=False)
-
     total_chunks = len(chunks)
     logger.info(f"Starting seeding of {total_chunks} chunks in batches of {batch_size}")
 
@@ -91,14 +85,15 @@ def seed_database(
             # Create KnowledgeBase objects without embeddings first
             kb_entries = [create_knowledge_entry(chunk) for chunk in batch]
 
-            # Generate embeddings synchronously (SentenceTransformer is CPU-bound)
+            # Generate embeddings synchronously using embedding service
             texts = [entry.content for entry in kb_entries]
             logger.info(f"Generating embeddings for {len(texts)} texts...")
 
             try:
+                # Generate embeddings one by one (model is cached)
                 embeddings = []
                 for text in texts:
-                    emb = rag_service.get_embedding(text)  # sync call
+                    emb = get_embedding(text)
                     embeddings.append(emb)
 
                 # Assign embeddings to entries
