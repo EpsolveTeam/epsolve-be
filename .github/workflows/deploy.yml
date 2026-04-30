@@ -70,7 +70,13 @@ jobs:
             fi
 
             ./venv/bin/pip install --upgrade pip
-            ./venv/bin/pip install -r requirements.txt
+
+            # Install PyTorch CPU-only first (required by sentence-transformers)
+            # Using explicit index URL ensures compatible wheel for Ubuntu/Linux
+            ./venv/bin/pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
+
+            # Install remaining dependencies
+            ./venv/bin/pip install -r requirements.txt --no-cache-dir
 
             # Set environment for migration & seeding
             export ENV_STATE=${{ github.ref_name }}
