@@ -34,7 +34,7 @@ class RAGService:
             if not settings.GOOGLE_API_KEY:
                 raise ValueError("GOOGLE_API_KEY not configured in environment")
             self.genai_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
-            self.chat_model = "gemini-1.5-flash"
+            self.chat_model = "gemini-2.5-flash-lite"
             logger.success("Gemini LLM initialized")
         else:
             self.genai_client = None
