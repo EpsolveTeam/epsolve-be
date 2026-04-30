@@ -59,7 +59,7 @@ jobs:
             DATABASE_URL="${{ secrets.DATABASE_URL }}"
             SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
             SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+            GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}"
             BREVO_API_KEY="${{ secrets.BREVO_API_KEY }}"
             BREVO_SENDER_EMAIL="${{ secrets.BREVO_SENDER_EMAIL }}"
             EOF
@@ -71,6 +71,16 @@ jobs:
 
             ./venv/bin/pip install --upgrade pip
             ./venv/bin/pip install -r requirements.txt
+
+            # Set environment for migration & seeding
+            export ENV_STATE=${{ github.ref_name }}
+
+            # Apply database migrations (adds source_url column, changes embedding dim)
+            ./venv/bin/alembic upgrade head
+
+            # Seed Knowledge Base with Epson FAQ data (generates embeddings)
+            # Note: First run downloads sentence-transformers model (~400MB)
+            ./venv/bin/python scripts/seed_faq.py
 
             # Restart or start the application via PM2
             pm2 delete $NAME || true
