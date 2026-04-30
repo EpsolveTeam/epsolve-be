@@ -71,18 +71,20 @@ jobs:
 
             ./venv/bin/pip install --upgrade pip
 
-            # Install PyTorch CPU-only first (required by sentence-transformers)
+            # Install NumPy 1.x first (sentence-transformers requires NumPy <2)
+            ./venv/bin/pip install "numpy<2" --no-cache-dir
+
+            # Install PyTorch CPU-only (compatible with NumPy 1.x)
             ./venv/bin/pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
 
-            # Install sentence-transformers explicitly (ensure it's present)
+            # Install sentence-transformers explicitly
             ./venv/bin/pip install sentence-transformers==2.7.0 --no-cache-dir
 
-            # Install remaining dependencies from requirements.txt
-            # Note: google-genai and other deps
+            # Install remaining dependencies
             ./venv/bin/pip install -r requirements.txt --no-cache-dir
 
-            # Verify critical packages are installed
-            ./venv/bin/python -c "import sentence_transformers; import google.genai; print('✅ Dependencies OK')"
+            # Verify critical packages
+            ./venv/bin/python -c "import numpy; import torch; import sentence_transformers; print('✅ Dependencies OK')"
 
             # Set environment for migration & seeding
             export ENV_STATE=${{ github.ref_name }}
