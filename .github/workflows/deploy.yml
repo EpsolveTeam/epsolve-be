@@ -9,33 +9,33 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     steps:
-       - name: Checkout repository
-         uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-       - name: Ensure venv is not tracked
-         run: |
-           # Check if venv is tracked by git
-           if git ls-files --error-unmatch venv/ > /dev/null 2>&1; then
-             echo "⚠️ venv/ is tracked by git — removing from index"
-             git rm -r --cached venv/
-             git commit -m "chore: remove venv from git index"
-           else
-             echo "✅ venv/ is not tracked (clean)"
-           fi
+      - name: Ensure venv is not tracked
+        run: |
+          # Check if venv is tracked by git
+          if git ls-files --error-unmatch venv/ > /dev/null 2>&1; then
+            echo "⚠️ venv/ is tracked by git — removing from index"
+            git rm -r --cached venv/
+            git commit -m "chore: remove venv from git index"
+          else
+            echo "✅ venv/ is not tracked (clean)"
+          fi
 
-       - name: Create deployment artifact (clean)
-         run: |
-           # Create tar excluding large/unnecessary directories
-           tar --exclude='venv' \
-               --exclude='__pycache__' \
-               --exclude='*.pyc' \
-               --exclude='.git' \
-               --exclude='node_modules' \
-               --exclude='*.log' \
-               --exclude='*.tmp' \
-               --exclude='.venv' \
-               -czf deploy_package.tar.gz \
-               -C $GITHUB_WORKSPACE .
+      - name: Create deployment artifact (clean)
+        run: |
+          # Create tar excluding large/unnecessary directories
+          tar --exclude='venv' \
+              --exclude='__pycache__' \
+              --exclude='*.pyc' \
+              --exclude='.git' \
+              --exclude='node_modules' \
+              --exclude='*.log' \
+              --exclude='*.tmp' \
+              --exclude='.venv' \
+              -czf deploy_package.tar.gz \
+              -C $GITHUB_WORKSPACE .
 
       - name: Transfer artifact to server
         uses: appleboy/scp-action@master
