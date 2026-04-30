@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -16,7 +17,7 @@ router = APIRouter()
 
 class ChatMessageRequest(BaseModel):
     session_id: str
-    user_id: Optional[int] = None
+    user_id: Optional[UUID] = None
     user_query: str
     image_query_url: Optional[str] = None
 

@@ -123,8 +123,6 @@ def main():
     """Main entry point."""
     logger.info("Initializing FAQ data seeding...")
 
-    # No API key required for embedding-only mode (uses HuggingFace locally)
-
     # Load FAQ data
     if not FAQ_JSON_PATH.exists():
         logger.error(f"FAQ JSON not found at {FAQ_JSON_PATH}")
@@ -135,6 +133,16 @@ def main():
     # Create database engine
     database_url = settings.DATABASE_URL
     engine = create_engine(database_url)
+
+    # Check if already seeded
+    with Session(engine) as session:
+        existing_count = session.query(KnowledgeBase).count()
+        expected_count = len(chunks)
+        if existing_count >= expected_count:
+            logger.info(f"KnowledgeBase already seeded ({existing_count}/{expected_count} entries). Skipping.")
+            return
+        else:
+            logger.info(f"KnowledgeBase has {existing_count} entries, need {expected_count}. Proceeding with seeding...")
 
     # Run seeding (synchronous)
     try:

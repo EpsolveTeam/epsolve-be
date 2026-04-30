@@ -66,6 +66,8 @@ jobs:
             GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}"
             BREVO_API_KEY="${{ secrets.BREVO_API_KEY }}"
             BREVO_SENDER_EMAIL="${{ secrets.BREVO_SENDER_EMAIL }}"
+            HF_HOME="/tmp/hf_cache"
+            HF_HUB_CACHE="/tmp/hf_cache/hub"
             EOF
             
             # Initialize virtual environment if not present
@@ -108,10 +110,6 @@ jobs:
 
             # Apply database migrations (adds source_url column, changes embedding dim)
             ./venv/bin/alembic upgrade head
-
-            # Seed Knowledge Base with Epson FAQ data (generates embeddings)
-            # Note: First run downloads sentence-transformers model (~90MB)
-            ./venv/bin/python scripts/seed_faq.py
 
             # Restart or start the application via PM2
             pm2 delete $NAME || true
