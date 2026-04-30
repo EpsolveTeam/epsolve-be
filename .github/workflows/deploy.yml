@@ -14,7 +14,12 @@ jobs:
 
       - name: Create deployment artifact (clean)
         run: |
-          # Create tar excluding large/unnecessary directories
+          # Create a snapshot to avoid "file changed" during tar
+          SNAPSHOT_DIR="/tmp/deploy_snapshot_${{ github.run_id }}"
+          mkdir -p "$SNAPSHOT_DIR"
+          cp -r $GITHUB_WORKSPACE/* "$SNAPSHOT_DIR/"
+          
+          # Create tar from snapshot, excluding unnecessary files
           tar --exclude='venv' \
               --exclude='__pycache__' \
               --exclude='*.pyc' \
@@ -23,8 +28,12 @@ jobs:
               --exclude='*.log' \
               --exclude='*.tmp' \
               --exclude='.venv' \
+              --exclude='.DS_Store' \
               -czf deploy_package.tar.gz \
-              -C $GITHUB_WORKSPACE .
+              -C "$SNAPSHOT_DIR" .
+          
+          # Cleanup snapshot
+          rm -rf "$SNAPSHOT_DIR"
 
       - name: Transfer artifact to server
         uses: appleboy/scp-action@master
