@@ -93,11 +93,24 @@ jobs:
             # Set environment for migration & seeding
             export ENV_STATE=${{ github.ref_name }}
 
+            # Clean up disk space to ensure enough room for model download (~90MB)
+            echo "🧹 Cleaning up disk space before seeding..."
+            rm -rf ~/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2 2>/dev/null || true
+            rm -rf ~/.cache/huggingface/hub 2>/dev/null || true
+            rm -rf ~/.cache/pip 2>/dev/null || true
+            pm2 flush 2>/dev/null || true
+            sudo apt-get clean -y 2>/dev/null || true
+
+            # Use /tmp for HuggingFace cache (more space)
+            export HF_HOME=/tmp/hf_cache
+            export HF_HUB_CACHE=/tmp/hf_cache/hub
+            mkdir -p $HF_HOME $HF_HUB_CACHE
+
             # Apply database migrations (adds source_url column, changes embedding dim)
             ./venv/bin/alembic upgrade head
 
             # Seed Knowledge Base with Epson FAQ data (generates embeddings)
-            # Note: First run downloads sentence-transformers model (~400MB)
+            # Note: First run downloads sentence-transformers model (~90MB)
             ./venv/bin/python scripts/seed_faq.py
 
             # Restart or start the application via PM2
