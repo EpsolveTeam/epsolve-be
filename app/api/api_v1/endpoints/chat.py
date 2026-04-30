@@ -1,5 +1,5 @@
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 import os
 from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
 from sqlalchemy.orm import Session
@@ -49,7 +49,7 @@ async def upload_image_to_supabase(image: UploadFile, user_id: UUID, session_id:
     # Ensure all parts are strings
     user_id_str = str(user_id)
     session_id_str = str(session_id)
-    unique_name = str(UUID())
+    unique_name = str(uuid4())
     storage_path = f"{user_id_str}/{session_id_str}/{unique_name}{ext}"
 
     try:
