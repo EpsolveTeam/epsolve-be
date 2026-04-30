@@ -72,11 +72,17 @@ jobs:
             ./venv/bin/pip install --upgrade pip
 
             # Install PyTorch CPU-only first (required by sentence-transformers)
-            # Using explicit index URL ensures compatible wheel for Ubuntu/Linux
             ./venv/bin/pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
 
-            # Install remaining dependencies
+            # Install sentence-transformers explicitly (ensure it's present)
+            ./venv/bin/pip install sentence-transformers==2.7.0 --no-cache-dir
+
+            # Install remaining dependencies from requirements.txt
+            # Note: google-genai and other deps
             ./venv/bin/pip install -r requirements.txt --no-cache-dir
+
+            # Verify critical packages are installed
+            ./venv/bin/python -c "import sentence_transformers; import google.genai; print('✅ Dependencies OK')"
 
             # Set environment for migration & seeding
             export ENV_STATE=${{ github.ref_name }}
