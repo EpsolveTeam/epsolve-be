@@ -46,7 +46,11 @@ async def upload_image_to_supabase(image: UploadFile, user_id: UUID, session_id:
     filename = image.filename or "image.jpg"
     ext = os.path.splitext(filename)[1] or ".jpg"
     # Unique path: {user_id}/{session_id}/{uuid4}{ext}
-    storage_path = f"{user_id}/{session_id}/{UUID()}{ext}"
+    # Ensure all parts are strings
+    user_id_str = str(user_id)
+    session_id_str = str(session_id)
+    unique_name = str(UUID())
+    storage_path = f"{user_id_str}/{session_id_str}/{unique_name}{ext}"
 
     try:
         # Upload to Supabase Storage (bucket: chat-images)
