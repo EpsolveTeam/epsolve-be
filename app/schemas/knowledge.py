@@ -8,6 +8,29 @@ class KnowledgeCreate(BaseModel):
     category: str
     division: str
 
+class KnowledgeListResponse(BaseModel):
+    id: int
+    title: str
+    category: str
+    division: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class KnowledgeDetailResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    category: str
+    division: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class KnowledgeResponse(BaseModel):
     id: int
     title: str
@@ -15,7 +38,7 @@ class KnowledgeResponse(BaseModel):
     category: str
     division: str
     source_url: Optional[str] = None
-    created_at: datetime 
+    created_at: datetime
     updated_at: datetime
 
     class Config:
