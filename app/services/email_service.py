@@ -1,13 +1,22 @@
 import requests
 import io
-import pandas as pd
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlmodel import create_engine, Session as SQLModelSession
 from supabase import create_client, Client
 from app.core.config import settings
 from loguru import logger
 from app.models.ticket import Ticket
+
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.units import inch
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
 
 engine = create_engine(settings.DATABASE_URL, echo=False, pool_pre_ping=True)
 
@@ -95,49 +104,10 @@ def send_resolution_email(ticket_id: int, user_email: str, subject: str, solutio
         logger.error(f"Gagal kirim email resolusi: {e}")
 
 
-def generate_analytics_excel() -> bytes:
-    """Generate Excel report from all tickets and return as bytes."""
-    close_session = False
-    db = SQLModelSession(engine)
-    close_session = True
-    
-    try:
-        tickets = db.query(Ticket).all()
-        logger.info(f"Generating Excel with {len(tickets)} tickets")
-        
-        data = []
-        for t in tickets:
-            data.append({
-                "ID Tiket": t.id,
-                "Email User": t.user_email,
-                "Subjek": t.subject,
-                "Kategori": t.category,
-                "Divisi": t.division,
-                "Status": t.status,
-                "Tanggal Dibuat": t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else ""
-            })
-        
-        df = pd.DataFrame(data)
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Report Tiket')
-        
-        output.seek(0)
-        excel_bytes = output.getvalue()
-        logger.info(f"Excel generated successfully, size: {len(excel_bytes)} bytes")
-        return excel_bytes
-    except Exception as e:
-        logger.error(f"Failed to generate Excel: {e}")
-        raise
-    finally:
-        if close_session:
-            db.close()
-
-
 def send_analytics_report_email(user_email: str, user_name: str, report_data: dict):
     """
-    Mengirim laporan Analytics ke Admin/Manajer dengan link download Excel.
-    Generate Excel → Upload ke Supabase → Kirim email dengan signed URL.
+    Mengirim laporan Analytics ke email tujuan dengan link download PDF.
+    Generate PDF → Upload ke Supabase → Kirim email dengan signed URL.
     """
     metrics = report_data.get("ticket_metrics", {})
     chats = report_data.get("chatbot_metrics", {})
@@ -154,10 +124,21 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
 
     button_style = "display: inline-block; background-color: #0051C3; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; margin-top: 20px;"
 
+    now = datetime.utcnow()
+    start_date = (now - timedelta(days=30)).strftime("%d%m%Y")
+    end_date = now.strftime("%d%m%Y")
+    filename = f"Laporan_{start_date}-{end_date}.pdf"
+    
     download_url = None
     try:
-        excel_bytes = generate_analytics_excel()
-        logger.info(f"Excel generated: {len(excel_bytes)} bytes")
+        pdf_bytes = generate_analytics_pdf({
+            "period": "1m",
+            "generated_at": now.strftime("%d/%m/%Y %H:%M"),
+            "start_date": (now - timedelta(days=30)).strftime("%d/%m/%Y"),
+            "end_date": now.strftime("%d/%m/%Y"),
+            "tickets": []
+        })
+        logger.info(f"PDF generated: {len(pdf_bytes)} bytes")
         
         try:
             buckets = supabase.storage.list_buckets()
@@ -170,15 +151,14 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
         
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
-        filename = f"report_analytics_epsolve_{timestamp}_{unique_id}.xlsx"
         file_path = f"analytics/{filename}"
         
         supabase.storage.from_(REPORTS_BUCKET).upload(
             path=file_path,
-            file=excel_bytes,
-            file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+            file=pdf_bytes,
+            file_options={"content-type": "application/pdf"}
         )
-        logger.info(f"Excel uploaded to Supabase: {file_path}")
+        logger.info(f"PDF uploaded to Supabase: {file_path}")
         
         signed_url_response = supabase.storage.from_(REPORTS_BUCKET).create_signed_url(
             path=file_path,
@@ -190,20 +170,20 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
         logger.info(f"Signed URL generated: {download_url}")
         
     except Exception as e:
-        logger.error(f"Failed to prepare Excel/upload: {e}")
+        logger.error(f"Failed to prepare PDF/upload: {e}")
         download_url = None
 
     if download_url:
         download_section = f'''
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
-            <a href="{download_url}" target="_blank" style="{button_style}">Download File Laporan</a>
+            <a href="{download_url}" target="_blank" style="{button_style}">Download Laporan PDF</a>
             <p style="color: #9ca3af; font-size: 12px; margin-top: 15px; margin-bottom: 0;">Link aktif selama 7 hari. Klik tombol di atas untuk mengunduh file.</p>
         </div>
         '''
     else:
         download_section = '''
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
-            <p style="color: #ef4444; font-size: 14px; font-weight: bold;">⚠️ Gagal menyiapkan laporan Excel</p>
+            <p style="color: #ef4444; font-size: 14px; font-weight: bold;">⚠️ Gagal menyiapkan laporan PDF</p>
             <p style="color: #9ca3af; font-size: 12px; margin-top: 10px; margin-bottom: 0;">Silakan hubungi administrator atau coba lagi nanti.</p>
         </div>
         '''
@@ -246,3 +226,85 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
         logger.info(f"Email laporan analytics berhasil dikirim ke {user_email}")
     except Exception as e:
         logger.error(f"Gagal kirim email laporan: {e}")
+
+
+def generate_analytics_pdf(report_data: dict) -> bytes:
+    """
+    Generate PDF report from ticket data and return as bytes.
+    Format: Laporan_DDMMYYYY-DDMMYYYY.pdf
+    """
+    if not PDF_AVAILABLE:
+        logger.error("ReportLab not installed. Cannot generate PDF.")
+        raise Exception("ReportLab library required for PDF generation")
+    
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=letter)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        spaceAfter=30,
+        alignment=1,
+        textColor=colors.darkblue
+    )
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        spaceAfter=12,
+        textColor=colors.darkblue
+    )
+    normal_style = styles['Normal']
+    
+    title = Paragraph("Laporan Analytics Helpdesk", title_style)
+    elements.append(title)
+    elements.append(Spacer(1, 12))
+    
+    period_info = f"Periode: {report_data.get('start_date', '-')} - {report_data.get('end_date', '-')}"
+    generated_info = f"Dibuat: {report_data.get('generated_at', '-')}"
+    
+    elements.append(Paragraph(period_info, normal_style))
+    elements.append(Paragraph(generated_info, normal_style))
+    elements.append(Spacer(1, 20))
+    
+    tickets = report_data.get('tickets', [])
+    
+    heading = Paragraph("Daftar Tiket", heading_style)
+    elements.append(heading)
+    elements.append(Spacer(1, 8))
+    
+    if tickets:
+        table_data = [["ID", "Email", "Subjek", "Kategori", "Status", "Tanggal"]]
+        for t in tickets[:100]:
+            table_data.append([
+                str(t.id),
+                t.user_email[:20] + "..." if len(t.user_email) > 20 else t.user_email,
+                t.subject[:30] + "..." if len(t.subject) > 30 else t.subject,
+                t.category or "-",
+                t.status or "-",
+                t.created_at.strftime("%d/%m/%Y") if t.created_at else "-"
+            ])
+        
+        table = Table(table_data, colWidths=[0.5*inch, 1.5*inch, 2*inch, 1*inch, 0.8*inch, 0.8*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(table)
+    else:
+        elements.append(Paragraph("Tidak ada data tiket.", normal_style))
+    
+    doc.build(elements)
+    
+    output.seek(0)
+    return output.getvalue()

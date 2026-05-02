@@ -5,9 +5,8 @@ from loguru import logger
 from typing import Dict, Any
 from datetime import datetime, timedelta
 from app.core.config import settings
-from app.services.email_service import send_email_via_brevo, send_analytics_report_email
+from app.services.email_service import send_email_via_brevo, send_analytics_report_email, generate_analytics_pdf
 from fastapi.responses import StreamingResponse
-import pandas as pd
 import io
 
 from app.models.user import User, UserRole
@@ -20,7 +19,7 @@ router = APIRouter()
 
 @router.get("/summary", response_model=Dict[str, Any])
 def get_dashboard_summary(
-    period: str = Query("30d", description="Filter periode: 7d, 30d, 3m"),
+    period: str = Query("30d", description="Filter periode: 7d, 1w, 1m, 30d, 3m"),
     db: Session = Depends(get_session),
     current_user: User = Depends(require_admin)
 ):
@@ -35,6 +34,10 @@ def get_dashboard_summary(
         
         if period == "7d":
             days = 7
+        elif period == "1w":
+            days = 7
+        elif period == "1m":
+            days = 30
         elif period == "3m":
             days = 90
         else:
@@ -43,7 +46,6 @@ def get_dashboard_summary(
         start_current = now - timedelta(days=days)
         start_previous = start_current - timedelta(days=days)
 
-        # Helper function BARU untuk format UI Insight
         def get_trend_details(current, previous):
             if previous == 0:
                 trend_value = 100.0 if current > 0 else 0.0
@@ -134,12 +136,20 @@ def get_dashboard_summary(
 
         problem_frequency = []
         for cat, count in category_counts:
-            chat_count_estimation = count * 3 
+            if cat:
+                cat_lower = cat.lower()
+                keyword_count = db.query(ChatLog).filter(
+                    ChatLog.created_at >= start_current,
+                    ChatLog.user_query.ilike(f"%{cat_lower}%")
+                ).count()
+            else:
+                keyword_count = 0
+            
             problem_frequency.append({
                 "category": cat,
                 "ticket_count": count,
-                "chat_count": chat_count_estimation, 
-                "escalation_rate": f"{round((count / chat_count_estimation * 100), 1)}%" if chat_count_estimation > 0 else "0%"
+                "chat_count": keyword_count, 
+                "escalation_rate": f"{round((count / keyword_count * 100), 1)}%" if keyword_count > 0 else "0%"
             })
 
         return {
@@ -156,7 +166,7 @@ def get_dashboard_summary(
                 "resolution_rate": resolution_rate,
                 "resolution_trend": ticket_resolution_trend,
                 "avg_resolution_time": avg_resolution_time,
-                "avg_resolution_time_trend": avg_time_trend # BARU: Untuk UI Rata-rata waktu
+                "avg_resolution_time_trend": avg_time_trend
             },
             "chart_data": chart_data,
             "problem_frequency": problem_frequency
@@ -166,74 +176,88 @@ def get_dashboard_summary(
         logger.error(f"Gagal mengambil data analytics: {str(e)}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan saat menghitung data analytics")
 
-@router.get("/export-excel")
-def export_analytics_to_excel(
+@router.get("/export-pdf")
+def export_analytics_to_pdf(
+    period: str = Query("30d", description="Filter periode: 7d, 1w, 1m, 30d, 3m"),
     db: Session = Depends(get_session),
     current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.MANAGER))
 ):
     """
-    Administrator & Manager mendownload report (Excel).
+    Administrator & Manager mendownload report dalam format PDF.
+    Nama file: Laporan_DDMMYYYY-DDMMYYYY.pdf
     """
     try:
-        tickets = db.query(Ticket).all()
+        now = datetime.utcnow()
         
-        data = []
-        for t in tickets:
-            data.append({
-                "ID Tiket": t.id,
-                "Email User": t.user_email,
-                "Subjek": t.subject,
-                "Kategori": t.category,
-                "Divisi": t.division,
-                "Status": t.status,
-                "Tanggal Dibuat": t.created_at.strftime("%Y-%m-%d %H:%M")
-            })
+        if period == "7d" or period == "1w":
+            days = 7
+        elif period == "1m":
+            days = 30
+        elif period == "3m":
+            days = 90
+        else:
+            days = 30
+            
+        start_date = now - timedelta(days=days)
         
-        df = pd.DataFrame(data)
-
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Report Tiket')
+        start_str = start_date.strftime("%d%m%Y")
+        end_str = now.strftime("%d%m%Y")
+        filename = f"Laporan_{start_str}-{end_str}.pdf"
         
-        output.seek(0)
-
-        headers = {
-            'Content-Disposition': 'attachment; filename="report_analytics_epsolve.xlsx"'
+        tickets = db.query(Ticket).filter(Ticket.created_at >= start_date).all()
+        
+        report_data = {
+            "period": period,
+            "generated_at": now.strftime("%d/%m/%Y %H:%M"),
+            "start_date": start_date.strftime("%d/%m/%Y"),
+            "end_date": now.strftime("%d/%m/%Y"),
+            "tickets": tickets
         }
-        return StreamingResponse(output, headers=headers, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        
+        pdf_bytes = generate_analytics_pdf(report_data)
+        
+        output = io.BytesIO(pdf_bytes)
+        
+        headers = {
+            'Content-Disposition': f'attachment; filename="{filename}"'
+        }
+        return StreamingResponse(output, headers=headers, media_type='application/pdf')
 
     except Exception as e:
-        logger.error(f"Gagal generate Excel: {e}")
-        raise HTTPException(status_code=500, detail="Gagal mengunduh laporan Excel")
+        logger.error(f"Gagal generate PDF: {e}")
+        raise HTTPException(status_code=500, detail="Gagal mengunduh laporan PDF")
 
 
 @router.post("/distribute-report")
-def distribute_report_to_managers(
+def distribute_report(
     background_tasks: BackgroundTasks,
+    recipient_email: str = Query(..., description="Email penerima laporan"),
+    period: str = Query(..., description="Periode laporan: 3m, 1m, 1w"),
     db: Session = Depends(get_session),
     current_user: User = Depends(require_admin)
 ):
     """
-    Administrator mengirim email otomatis ke semua Manajer.
+    Mengirim laporan otomatis ke email yang ditentukan berdasarkan periode.
+    Periode: 3m (3 bulan), 1m (1 bulan), 1w (1 minggu).
     """
     try:
-        report_data = get_dashboard_summary(period="30d", db=db, current_user=current_user)
+        period_days = {"3m": 90, "1m": 30, "1w": 7}
+        if period not in period_days:
+            raise HTTPException(status_code=400, detail="Periode tidak valid. Gunakan: 3m, 1m, 1w")
         
-        managers = db.query(User).filter(User.role == UserRole.MANAGER).all()
+        report_data = get_dashboard_summary(period=period, db=db, current_user=current_user)
         
-        if not managers:
-            managers = [current_user]
+        background_tasks.add_task(
+            send_analytics_report_email,
+            user_email=recipient_email,
+            user_name="Penerima",
+            report_data=report_data
+        )
+        
+        return {"message": f"Laporan berhasil dikirim ke {recipient_email}."}
 
-        for manager in managers:
-            background_tasks.add_task(
-                send_analytics_report_email,
-                user_email=manager.email,
-                user_name=manager.full_name,
-                report_data=report_data
-            )
-        
-        return {"message": f"Laporan berhasil dikirim ke {len(managers)} Manajer."}
-
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Gagal distribusi laporan: {e}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan saat mendistribusikan laporan")
