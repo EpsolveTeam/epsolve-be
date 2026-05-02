@@ -56,7 +56,7 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, attachm
         raise e
 
 
-def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email: str, subject: str, description: str):
+def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email: str, description: str, category: str):
     """Trigger email: Dikirim ke SEMUA Admin/Helpdesk yang ada di DB."""
     html_content = f"""
     <div style="{BASE_STYLE}">
@@ -69,7 +69,7 @@ def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email
         for email in admin_emails:
             send_email_via_brevo(
                 to_email=email, 
-                subject=f"[NEW TICKET #{ticket_id}] {subject}", 
+                subject=f"[NEW TICKET #{ticket_id}]", 
                 html_content=html_content
             )
         logger.info(f"Email notifikasi tiket #{ticket_id} dikirim ke {len(admin_emails)} admin")
@@ -77,13 +77,13 @@ def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email
         logger.error(f"Gagal kirim notif tiket: {e}")
 
 
-def send_resolution_email(ticket_id: int, user_email: str, subject: str, solution: str):
+def send_resolution_email(ticket_id: int, user_email: str, description: str, solution: str):
     """Trigger email: Saat Admin membalas tiket (Dikirim ke Karyawan)."""
     html_content = f"""
     <div style="{BASE_STYLE}">
         <div style="{CARD_STYLE}">
             <h2 style="color: #111827; margin-top: 0; font-size: 24px; letter-spacing: -0.5px;">Update Tiket <span style="color: #0051C3;">#{ticket_id}</span></h2>
-            <p style="color: #6b7280; font-size: 15px; margin-bottom: 30px;">Halo, permintaan Anda mengenai <strong>"{subject}"</strong> telah selesai diproses.</p>
+            <p style="color: #6b7280; font-size: 15px; margin-bottom: 30px;">Halo, permintaan Anda telah selesai diproses.</p>
 
             <div style="text-align: left; margin-bottom: 30px;">
                 <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Tanggapan Tim Helpdesk:</p>
@@ -198,7 +198,7 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
                 <tr>
                     <td width="48%" style="background-color: #f8fafc; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #f1f5f9;">
                         <span style="color: #6b7280; font-size: 12px; text-transform: uppercase;">Total Tiket</span><br>
-                        <span style="color: #111827; font-size: 24px; font-weight: bold;">{metrics.get('total', 0)}</span>
+                        <span style="color: #111827; font-size: 24px; font-weight: bold;">{metrics.get('total_escalations', 0)}</span>
                     </td>
                     <td width="4%"></td>
                     <td width="48%" style="background-color: #f8fafc; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #f1f5f9;">
@@ -277,18 +277,17 @@ def generate_analytics_pdf(report_data: dict) -> bytes:
     elements.append(Spacer(1, 8))
     
     if tickets:
-        table_data = [["ID", "Email", "Subjek", "Kategori", "Status", "Tanggal"]]
+        table_data = [["ID", "Email", "Kategori", "Status", "Tanggal"]]
         for t in tickets[:100]:
             table_data.append([
                 str(t.id),
                 t.user_email[:20] + "..." if len(t.user_email) > 20 else t.user_email,
-                t.subject[:30] + "..." if len(t.subject) > 30 else t.subject,
                 t.category or "-",
                 t.status or "-",
                 t.created_at.strftime("%d/%m/%Y") if t.created_at else "-"
             ])
         
-        table = Table(table_data, colWidths=[0.5*inch, 1.5*inch, 2*inch, 1*inch, 0.8*inch, 0.8*inch])
+        table = Table(table_data, colWidths=[0.5*inch, 1.5*inch, 2*inch, 1*inch, 0.8*inch])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
