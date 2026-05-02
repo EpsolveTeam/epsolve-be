@@ -21,6 +21,7 @@ BUCKET_NAME = "helpdesk-files"
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_ticket(
+    name: str = Form(...),
     user_email: str = Form(...),
     description: str = Form(...),
     category: str = Form(...),
@@ -36,14 +37,6 @@ def create_ticket(
     logger.info(f"Menerima eskalasi tiket kategori {category} dari {current_user.email}")
 
     try:
-        # Validasi: pastikan user_email yang di-submit sesuai dengan user yang sedang login
-        if user_email != current_user.email:
-            logger.error(f"Email form ({user_email}) tidak cocok dengan email user login ({current_user.email})")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email pengaju tidak valid"
-            )
-        
         final_image_url = None
 
         if image:
@@ -62,6 +55,7 @@ def create_ticket(
 
         new_ticket = Ticket(
             user_id=current_user.id,
+            name=name,
             user_email=user_email,
             description=description,
             category=category,
@@ -96,7 +90,7 @@ def create_ticket(
         return {
             "message": "Tiket berhasil dibuat dan notifikasi telah dikirim",
             "ticket_id": new_ticket.id,
-            "user_name": current_user.full_name,
+            "name": new_ticket.name,
             "user_email": new_ticket.user_email,
             "description": new_ticket.description,
             "category": new_ticket.category,
@@ -153,11 +147,11 @@ def get_tickets(
         user = db.query(User).filter(User.id == t.user_id).first() if t.user_id else None
         result.append({
             "id": t.id,
+            "name": t.name,
             "description": t.description,
             "category": t.category,
             "division": t.division,
             "user_email": t.user_email,
-            "user_name": user.full_name if user else None,
             "status": t.status,
             "admin_response": t.admin_response,
             "image_url": t.image_url,
