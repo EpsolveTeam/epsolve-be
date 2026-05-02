@@ -9,7 +9,7 @@ from app.models.ticket import Ticket
 from app.models.user import User
 from app.core.dependencies import require_karyawan, require_admin
 from app.services.embedding_service import get_embedding
-from app.schemas.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeUpdate
+from app.schemas.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeUpdate, KnowledgeListResponse, KnowledgeDetailResponse
 
 router = APIRouter()
 
@@ -48,7 +48,7 @@ def create_knowledge(
         raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server")
 
 
-@router.get("/", response_model=List[KnowledgeResponse])
+@router.get("/", response_model=List[KnowledgeListResponse])
 def get_all_knowledge(
     category: Optional[str] = Query(None, description="Filter kategori"),
     division: Optional[str] = Query(None, description="Filter divisi"),
@@ -70,7 +70,7 @@ def get_all_knowledge(
     return query.order_by(KnowledgeBase.updated_at.desc()).all()
 
 
-@router.get("/{kb_id}", response_model=KnowledgeResponse)
+@router.get("/{kb_id}", response_model=KnowledgeDetailResponse)
 def get_knowledge_by_id(
     kb_id: int,
     db: Session = Depends(get_session),
