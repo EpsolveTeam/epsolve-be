@@ -11,8 +11,6 @@ class UserRole(str, Enum):
     KARYAWAN = "karyawan"
     HELPDESK = "helpdesk"
     ADMIN = "admin"
-    MANAGER = "manager"
-
 
 class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)

@@ -5,7 +5,6 @@ from loguru import logger
 
 from app.db.session import get_session
 from app.models.knowledge import KnowledgeBase
-from app.models.ticket import Ticket
 from app.models.user import User
 from app.core.dependencies import require_karyawan, require_admin
 from app.services.embedding_service import get_embedding
@@ -139,55 +138,3 @@ def update_knowledge(
 
     logger.info(f"Jawaban Knowledge Base ID #{kb_id} berhasil diperbarui oleh {current_user.email}.")
     return kb_data
-
-@router.post("/from-ticket/{ticket_id}", status_code=status.HTTP_201_CREATED)
-def create_kb_from_ticket(
-    ticket_id: int,
-    db: Session = Depends(get_session),
-    current_user: User = Depends(require_admin),
-):
-    """
-    Mengubah tiket yang sudah diselesaikan menjadi artikel Knowledge Base.
-    Embedding akan di-generate otomatis dari konten.
-    """
-    logger.info(f"Admin {current_user.email} mengkonversi tiket #{ticket_id} menjadi Knowledge Base")
-
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Tiket tidak ditemukan.")
-
-    if not ticket.admin_response:
-        raise HTTPException(
-            status_code=400,
-            detail="Tiket ini belum memiliki balasan dari admin. Tidak bisa dijadikan Knowledge Base."
-        )
-
-    kb_content = f"**Keluhan Pelanggan:**\n{ticket.description}\n\n**Solusi Helpdesk:**\n{ticket.admin_response}"
-    kb_title = ticket.subject or "Ticket Solution"
-
-    try:
-        embedding = get_embedding(kb_content)
-
-        new_kb = KnowledgeBase(
-            title=kb_title,
-            content=kb_content,
-            category=ticket.category,
-            division=ticket.division,
-            embedding=embedding
-        )
-
-        db.add(new_kb)
-        db.commit()
-        db.refresh(new_kb)
-
-        logger.success(f"Knowledge Base baru #{new_kb.id} berhasil dibuat dari Tiket #{ticket_id}")
-
-        return {
-            "message": "Artikel Knowledge Base berhasil dibuat dari tiket",
-            "kb_id": new_kb.id,
-            "data": new_kb
-        }
-
-    except Exception as e:
-        logger.error(f"Gagal membuat KB dari tiket: {str(e)}")
-        raise HTTPException(status_code=500, detail="Terjadi kesalahan server saat menyimpan Knowledge Base")

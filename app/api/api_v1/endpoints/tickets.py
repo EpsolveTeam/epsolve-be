@@ -6,9 +6,11 @@ from loguru import logger
 from supabase import create_client, Client
 from pydantic import BaseModel
 from app.services.email_service import send_ticket_notification, send_resolution_email
+from app.services.embedding_service import get_embedding
 
 from app.db.session import get_session
 from app.models.ticket import Ticket
+from app.models.knowledge import KnowledgeBase
 from app.models.user import User, UserRole
 from app.core.config import settings
 from app.core.dependencies import require_karyawan, require_helpdesk, get_current_user
@@ -175,6 +177,7 @@ def update_ticket(
 ):
     """
     Fitur bagi Admin/Helpdesk untuk merespons dan mengubah status tiket.
+    Otomatis membuat Knowledge Base ketika admin memberikan jawaban.
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
@@ -182,6 +185,7 @@ def update_ticket(
         raise HTTPException(status_code=404, detail="Tiket tidak ditemukan")
 
     old_status = ticket.status
+    created_kb = False
 
     if ticket_in.admin_response is not None:
         ticket.admin_response = ticket_in.admin_response
@@ -196,6 +200,29 @@ def update_ticket(
             solution=ticket.admin_response
         )
 
+        try:
+            kb_content = f"**Keluhan Pelanggan:**\n{ticket.description}\n\n**Solusi Helpdesk:**\n{ticket.admin_response}"
+            kb_title = ticket.name or "Ticket Solution"
+            
+            embedding = get_embedding(kb_content)
+            
+            new_kb = KnowledgeBase(
+                title=kb_title,
+                content=kb_content,
+                category=ticket.category,
+                division=ticket.division,
+                embedding=embedding
+            )
+            
+            db.add(new_kb)
+            db.commit()
+            db.refresh(new_kb)
+            
+            created_kb = True
+            logger.success(f"Knowledge Base otomatis #{new_kb.id} dibuat dari Tiket #{ticket_id}")
+        except Exception as e:
+            logger.error(f"Gagal membuat KB otomatis dari tiket: {str(e)}")
+
     if ticket_in.status is not None:
         ticket.status = ticket_in.status
 
@@ -203,4 +230,8 @@ def update_ticket(
     db.refresh(ticket)
 
     logger.info(f"Tiket #{ticket_id} diperbarui oleh {current_user.email}. Status: {old_status} -> {ticket.status}")
-    return {"message": f"Tiket #{ticket_id} berhasil diperbarui", "data": ticket}
+    return {
+        "message": f"Tiket #{ticket_id} berhasil diperbarui",
+        "data": ticket,
+        "knowledge_base_created": created_kb
+    }

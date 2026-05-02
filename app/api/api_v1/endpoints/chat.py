@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 import os
 from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
 from sqlalchemy.orm import Session
+from sqlalchemy import asc
 from typing import List, Optional
 from pydantic import BaseModel
 from loguru import logger
@@ -156,7 +157,7 @@ def get_chat_sessions(
     Mengambil daftar riwayat sesi chat user untuk ditampilkan di Sidebar.
     Judul (title) diambil dari pertanyaan pertama user di sesi tersebut.
     """
-    chats = db.query(ChatLog).filter(ChatLog.user_id == current_user.id).order_by(desc(ChatLog.created_at)).all()
+    chats = db.query(ChatLog).filter(ChatLog.user_id == current_user.id).order_by(asc(ChatLog.created_at)).all()
     
     sessions_dict = {}
     

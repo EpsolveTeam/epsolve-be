@@ -63,46 +63,40 @@ def get_dashboard_summary(
                 direction = "flat"
 
             return {
-                "value": trend_value,   # Untuk angka di pojok kanan atas (+ / -)
-                "text": text,           # Untuk insight text di bawah angka utama
-                "direction": direction  # Membantu Frontend menentukan warna (Merah/Hijau/Abu)
+                "value": trend_value,  
+                "text": text,           
+                "direction": direction  
             }
 
-        # ==========================================
-        # METRIK TIKET HELPDESK
-        # ==========================================
-        current_tickets = db.query(Ticket).filter(Ticket.created_at >= start_current).all()
-        prev_tickets = db.query(Ticket).filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current).all()
-        
-        total_tickets_current = len(current_tickets)
-        prev_tickets_count = len(prev_tickets)
+        total_tickets_current = db.query(Ticket).filter(Ticket.created_at >= start_current).count()
+        prev_tickets_count = db.query(Ticket).filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current).count()
         ticket_trend = get_trend_details(total_tickets_current, prev_tickets_count)
-
-        # Resolusi Bulan Ini
-        resolved_tickets = [t for t in current_tickets if t.status in ["closed", "answered"]]
+        
+        resolved_tickets = db.query(Ticket).filter(
+            Ticket.created_at >= start_current, 
+            Ticket.status.in_(["closed", "answered"])
+        ).all()
         resolved_count = len(resolved_tickets)
         resolution_rate = round((resolved_count / total_tickets_current * 100), 1) if total_tickets_current > 0 else 0
 
-        # Resolusi Bulan Sebelumnya
-        prev_resolved_tickets = [t for t in prev_tickets if t.status in ["closed", "answered"]]
+        prev_resolved_tickets = db.query(Ticket).filter(
+            Ticket.created_at >= start_previous, 
+            Ticket.created_at < start_current,
+            Ticket.status.in_(["closed", "answered"])
+        ).all()
         prev_resolved_count = len(prev_resolved_tickets)
         prev_resolution_rate = round((prev_resolved_count / prev_tickets_count * 100), 1) if prev_tickets_count > 0 else 0
         
         ticket_resolution_trend = get_trend_details(resolution_rate, prev_resolution_rate)
 
-        # Rata-rata Waktu Penyelesaian (Bulan Ini)
         total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in resolved_tickets if t.updated_at and t.created_at)
         avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
         avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
 
-        # Rata-rata Waktu Penyelesaian (Bulan Sebelumnya untuk cari Trend)
         prev_total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in prev_resolved_tickets if t.updated_at and t.created_at)
         prev_avg_resolution_seconds = prev_total_seconds / prev_resolved_count if prev_resolved_count > 0 else 0
         avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds)
 
-        # ==========================================
-        # METRIK CHATBOT
-        # ==========================================
         current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
         prev_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).count()
         chat_trend = get_trend_details(current_chats, prev_chats)
@@ -114,9 +108,6 @@ def get_dashboard_summary(
         prev_chat_resolution_rate = round((prev_resolved_chats / prev_chats * 100), 1) if prev_chats > 0 else 0
         chat_resolution_trend = get_trend_details(chat_resolution_rate, prev_chat_resolution_rate)
 
-        # ==========================================
-        # CHART & FREKUENSI
-        # ==========================================
         daily_stats_query = (
             db.query(
                 func.date(Ticket.created_at).label('date'),
@@ -180,10 +171,10 @@ def get_dashboard_summary(
 def export_analytics_to_pdf(
     period: str = Query("30d", description="Filter periode: 7d, 1w, 1m, 30d, 3m"),
     db: Session = Depends(get_session),
-    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.MANAGER))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     """
-    Administrator & Manager mendownload report dalam format PDF.
+    Administrator mendownload report dalam format PDF.
     Nama file: Laporan_DDMMYYYY-DDMMYYYY.pdf
     """
     try:
