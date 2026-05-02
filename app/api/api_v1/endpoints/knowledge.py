@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from loguru import logger
 
@@ -67,6 +68,37 @@ def get_all_knowledge(
         query = query.filter(KnowledgeBase.division == division) 
     
     return query.order_by(KnowledgeBase.updated_at.desc()).all()
+
+
+@router.get("/summary/stats")
+def get_knowledge_summary(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_karyawan)
+):
+    """
+    Mengambil statistik total pertanyaan (Knowledge Base) 
+    dan rincian jumlah pertanyaan per kategori.
+    """
+    logger.info(f"User {current_user.email} mengakses statistik Knowledge Base.")
+
+    try:
+        total_pertanyaan = db.query(KnowledgeBase).count()
+
+        category_counts = db.query(
+            KnowledgeBase.category,
+            func.count(KnowledgeBase.id).label("count")
+        ).group_by(KnowledgeBase.category).all()
+
+        detail_kategori = {cat: count for cat, count in category_counts if cat}
+
+        return {
+            "total_pertanyaan": total_pertanyaan,
+            "kategori_detail": detail_kategori
+        }
+
+    except Exception as e:
+        logger.error(f"Gagal mengambil statistik Knowledge Base: {str(e)}")
+        raise HTTPException(status_code=500, detail="Terjadi kesalahan saat menghitung statistik")
 
 
 @router.get("/{kb_id}", response_model=KnowledgeDetailResponse)
