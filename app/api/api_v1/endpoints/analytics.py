@@ -89,12 +89,32 @@ def get_dashboard_summary(
         
         ticket_resolution_trend = get_trend_details(resolution_rate, prev_resolution_rate)
 
-        total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in resolved_tickets if t.updated_at and t.created_at)
-        avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
+        total_seconds = 0
+        count_with_time = 0
+        for t in resolved_tickets:
+            upd = getattr(t, "updated_at", None)
+            cre = getattr(t, "created_at", None)
+            if upd and cre:
+                try:
+                    total_seconds += (upd.replace(tzinfo=None) - cre.replace(tzinfo=None)).total_seconds()
+                    count_with_time += 1
+                except Exception:
+                    pass
+        avg_resolution_seconds = total_seconds / count_with_time if count_with_time > 0 else 0
         avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
 
-        prev_total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in prev_resolved_tickets if t.updated_at and t.created_at)
-        prev_avg_resolution_seconds = prev_total_seconds / prev_resolved_count if prev_resolved_count > 0 else 0
+        prev_total_seconds = 0
+        prev_count_with_time = 0
+        for t in prev_resolved_tickets:
+            upd = getattr(t, "updated_at", None)
+            cre = getattr(t, "created_at", None)
+            if upd and cre:
+                try:
+                    prev_total_seconds += (upd.replace(tzinfo=None) - cre.replace(tzinfo=None)).total_seconds()
+                    prev_count_with_time += 1
+                except Exception:
+                    pass
+        prev_avg_resolution_seconds = prev_total_seconds / prev_count_with_time if prev_count_with_time > 0 else 0
         avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds)
 
         current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
@@ -222,33 +242,27 @@ def export_analytics_to_pdf(
 @router.post("/distribute-report")
 def distribute_report(
     background_tasks: BackgroundTasks,
-    recipient_email: str = Query(..., description="Email penerima laporan"),
-    period: str = Query(..., description="Periode laporan: 3m, 1m, 1w"),
     db: Session = Depends(get_session),
     current_user: User = Depends(require_admin)
 ):
     """
-    Mengirim laporan otomatis ke email yang ditentukan berdasarkan periode.
-    Periode: 3m (3 bulan), 1m (1 bulan), 1w (1 minggu).
+    Mengirim laporan otomatis ke email seluruh admin (periode default: 3m).
     """
     try:
-        period_days = {"3m": 90, "1m": 30, "1w": 7}
-        if period not in period_days:
-            raise HTTPException(status_code=400, detail="Periode tidak valid. Gunakan: 3m, 1m, 1w")
-        
+        period = "3m"
         report_data = get_dashboard_summary(period=period, db=db, current_user=current_user)
         
-        background_tasks.add_task(
-            send_analytics_report_email,
-            user_email=recipient_email,
-            user_name="Penerima",
-            report_data=report_data
-        )
+        admins = db.query(User).filter(User.role == UserRole.ADMIN).all()
+        for admin in admins:
+            background_tasks.add_task(
+                send_analytics_report_email,
+                user_email=admin.email,
+                user_name=admin.full_name,
+                report_data=report_data
+            )
         
-        return {"message": f"Laporan berhasil dikirim ke {recipient_email}."}
+        return {"message": "Laporan sedang dikirim ke seluruh admin."}
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Gagal distribusi laporan: {e}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan saat mendistribusikan laporan")
