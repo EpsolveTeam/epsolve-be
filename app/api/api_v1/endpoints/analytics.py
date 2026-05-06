@@ -155,13 +155,33 @@ def get_dashboard_summary(
         
         ticket_resolution_trend = get_trend_details(resolution_rate, prev_resolution_rate)
 
-        total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in resolved_tickets if t.updated_at and t.created_at)
-        avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
-        avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
+        total_seconds = 0
+        count_with_time = 0
+        for t in resolved_tickets:
+            upd = getattr(t, "updated_at", None)
+            cre = getattr(t, "created_at", None)
+            if upd and cre:
+                try:
+                    total_seconds += (upd.replace(tzinfo=None) - cre.replace(tzinfo=None)).total_seconds()
+                    count_with_time += 1
+                except Exception:
+                    pass
+        avg_resolution_seconds = total_seconds / count_with_time if count_with_time > 0 else 0
+        avg_resolution_time = format_duration(avg_resolution_seconds)
 
-        prev_total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in prev_resolved_tickets if t.updated_at and t.created_at)
-        prev_avg_resolution_seconds = prev_total_seconds / prev_resolved_count if prev_resolved_count > 0 else 0
-        avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds)
+        prev_total_seconds = 0
+        prev_count_with_time = 0
+        for t in prev_resolved_tickets:
+            upd = getattr(t, "updated_at", None)
+            cre = getattr(t, "created_at", None)
+            if upd and cre:
+                try:
+                    prev_total_seconds += (upd.replace(tzinfo=None) - cre.replace(tzinfo=None)).total_seconds()
+                    prev_count_with_time += 1
+                except Exception:
+                    pass
+        prev_avg_resolution_seconds = prev_total_seconds / prev_count_with_time if prev_count_with_time > 0 else 0
+        avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds, invert=True)
 
         current_questions = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
         prev_questions = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).count()
