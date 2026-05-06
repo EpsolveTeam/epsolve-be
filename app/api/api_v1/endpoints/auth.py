@@ -1,6 +1,11 @@
+import hashlib
+import secrets
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.core.security import (
     create_access_token,
@@ -13,7 +18,16 @@ from app.core.security import (
 )
 from app.db.session import get_session
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+    UserResponse,
+)
+from app.services.email_service import send_password_reset_email
 
 router = APIRouter()
 
@@ -98,3 +112,46 @@ def refresh(body: RefreshRequest, session: Session = Depends(get_session)):
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+def forgot_password(body: ForgotPasswordRequest, session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.email == body.email)).first()
+    # Selalu return sukses agar email valid/tidak valid tidak bisa ditebak
+    if not user or not user.is_active:
+        return {"message": "Jika email terdaftar, link reset password telah dikirim."}
+
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    user.password_reset_token = token_hash
+    user.password_reset_token_expiry = datetime.utcnow() + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES)
+    session.add(user)
+    session.commit()
+
+    reset_url = f"{settings.FRONTEND_URL}?reset_token={token}"
+    send_password_reset_email(user.email, user.full_name, reset_url)
+
+    return {"message": "Jika email terdaftar, link reset password telah dikirim."}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(body: ResetPasswordRequest, session: Session = Depends(get_session)):
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    user = session.exec(select(User).where(User.password_reset_token == token_hash)).first()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token tidak valid atau sudah digunakan.")
+
+    expiry = user.password_reset_token_expiry
+    if not expiry or datetime.utcnow() > expiry.replace(tzinfo=None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token sudah kadaluarsa. Silakan minta reset password baru.")
+
+    user.hashed_password = hash_password(body.new_password)
+    user.password_reset_token = None
+    user.password_reset_token_expiry = None
+    user.refresh_token_hash = None  # invalidate semua sesi aktif
+    session.add(user)
+    session.commit()
+
+    return {"message": "Password berhasil direset. Silakan masuk dengan password baru."}

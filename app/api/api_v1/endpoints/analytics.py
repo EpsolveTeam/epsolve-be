@@ -13,9 +13,49 @@ from app.models.user import User, UserRole
 from app.core.dependencies import require_admin, require_role
 from app.db.session import get_session
 from app.models.ticket import Ticket
-from app.models.chat_log import ChatLog 
+from app.models.chat_log import ChatLog
+from app.models.auto_report import AutoReportSetting
 
 router = APIRouter()
+
+VALID_PERIODS = {"off", "1w", "1m", "3m"}
+
+
+@router.get("/auto-report-settings")
+def get_auto_report_settings(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin)
+):
+    setting = db.get(AutoReportSetting, 1)
+    if not setting:
+        return {"email": "", "period": "off", "is_active": False}
+    return {"email": setting.email, "period": setting.period, "is_active": setting.is_active}
+
+
+@router.put("/auto-report-settings")
+def save_auto_report_settings(
+    email: str = Query(""),
+    period: str = Query("off"),
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin)
+):
+    if period not in VALID_PERIODS:
+        raise HTTPException(status_code=400, detail="Periode tidak valid. Gunakan: off, 1w, 1m, 3m")
+
+    setting = db.get(AutoReportSetting, 1)
+    if not setting:
+        setting = AutoReportSetting(id=1)
+        db.add(setting)
+
+    setting.email = email
+    setting.period = period
+    setting.is_active = period != "off"
+    setting.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(setting)
+
+    logger.info(f"Auto-report setting diperbarui oleh {current_user.email}: period={period}, email={email}")
+    return {"message": "Pengaturan laporan otomatis berhasil disimpan.", "period": period, "is_active": setting.is_active}
 
 @router.get("/summary", response_model=Dict[str, Any])
 def get_dashboard_summary(
@@ -46,26 +86,52 @@ def get_dashboard_summary(
         start_current = now - timedelta(days=days)
         start_previous = start_current - timedelta(days=days)
 
-        def get_trend_details(current, previous):
-            if previous == 0:
-                trend_value = 100.0 if current > 0 else 0.0
+        def format_duration(seconds):
+            seconds = int(seconds)
+            days    = seconds // 86400
+            hours   = (seconds % 86400) // 3600
+            minutes = (seconds % 3600) // 60
+            if days > 0:
+                return f"{days}h {hours}j {minutes}m"
+            elif hours > 0:
+                return f"{hours}j {minutes}m"
+            elif minutes > 0:
+                return f"{minutes}m"
             else:
-                trend_value = round(((current - previous) / previous) * 100, 1)
+                return "< 1m"
+
+        def get_trend_details(current, previous, invert=False):
+            if previous == 0:
+                return {
+                    "value": 0.0,
+                    "text": "Tidak ada data periode sebelumnya",
+                    "direction": "flat"
+                }
+
+            trend_value = round(((current - previous) / previous) * 100, 1)
 
             if trend_value > 0:
-                text = f"Meningkat {trend_value}% dibanding periode sebelumnya"
-                direction = "up"
+                if invert:
+                    text = f"Lebih lambat {trend_value}% dibanding periode sebelumnya"
+                    direction = "down"
+                else:
+                    text = f"Meningkat {trend_value}% dibanding periode sebelumnya"
+                    direction = "up"
             elif trend_value < 0:
-                text = f"Menurun {abs(trend_value)}% dibanding periode sebelumnya"
-                direction = "down"
+                if invert:
+                    text = f"Lebih cepat {abs(trend_value)}% dibanding periode sebelumnya"
+                    direction = "up"
+                else:
+                    text = f"Menurun {abs(trend_value)}% dibanding periode sebelumnya"
+                    direction = "down"
             else:
                 text = "Stabil dibanding periode sebelumnya"
                 direction = "flat"
 
             return {
-                "value": trend_value,  
-                "text": text,           
-                "direction": direction  
+                "value": abs(trend_value),
+                "text": text,
+                "direction": direction
             }
 
         total_tickets_current = db.query(Ticket).filter(Ticket.created_at >= start_current).count()
@@ -89,43 +155,27 @@ def get_dashboard_summary(
         
         ticket_resolution_trend = get_trend_details(resolution_rate, prev_resolution_rate)
 
-        total_seconds = 0
-        count_with_time = 0
-        for t in resolved_tickets:
-            upd = getattr(t, "updated_at", None)
-            cre = getattr(t, "created_at", None)
-            if upd and cre:
-                try:
-                    total_seconds += (upd.replace(tzinfo=None) - cre.replace(tzinfo=None)).total_seconds()
-                    count_with_time += 1
-                except Exception:
-                    pass
-        avg_resolution_seconds = total_seconds / count_with_time if count_with_time > 0 else 0
+        total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in resolved_tickets if t.updated_at and t.created_at)
+        avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
         avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
 
-        prev_total_seconds = 0
-        prev_count_with_time = 0
-        for t in prev_resolved_tickets:
-            upd = getattr(t, "updated_at", None)
-            cre = getattr(t, "created_at", None)
-            if upd and cre:
-                try:
-                    prev_total_seconds += (upd.replace(tzinfo=None) - cre.replace(tzinfo=None)).total_seconds()
-                    prev_count_with_time += 1
-                except Exception:
-                    pass
-        prev_avg_resolution_seconds = prev_total_seconds / prev_count_with_time if prev_count_with_time > 0 else 0
+        prev_total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in prev_resolved_tickets if t.updated_at and t.created_at)
+        prev_avg_resolution_seconds = prev_total_seconds / prev_resolved_count if prev_resolved_count > 0 else 0
         avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds)
 
-        current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
-        prev_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).count()
-        chat_trend = get_trend_details(current_chats, prev_chats)
+        current_questions = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
+        prev_questions = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).count()
+        questions_trend = get_trend_details(current_questions, prev_questions)
+
+        current_interactions = db.query(func.count(func.distinct(ChatLog.session_id))).filter(ChatLog.created_at >= start_current).scalar() or 0
+        prev_interactions = db.query(func.count(func.distinct(ChatLog.session_id))).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).scalar() or 0
+        interactions_trend = get_trend_details(current_interactions, prev_interactions)
 
         resolved_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current, ChatLog.is_resolved == True).count()
-        chat_resolution_rate = round((resolved_chats / current_chats * 100), 1) if current_chats > 0 else 0
+        chat_resolution_rate = round((resolved_chats / current_questions * 100), 1) if current_questions > 0 else 0
 
         prev_resolved_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current, ChatLog.is_resolved == True).count()
-        prev_chat_resolution_rate = round((prev_resolved_chats / prev_chats * 100), 1) if prev_chats > 0 else 0
+        prev_chat_resolution_rate = round((prev_resolved_chats / prev_questions * 100), 1) if prev_questions > 0 else 0
         chat_resolution_trend = get_trend_details(chat_resolution_rate, prev_chat_resolution_rate)
 
         daily_stats_query = (
@@ -148,26 +198,34 @@ def get_dashboard_summary(
         problem_frequency = []
         for cat, count in category_counts:
             if cat:
-                cat_lower = cat.lower()
-                keyword_count = db.query(ChatLog).filter(
+                user_ids = [
+                    r.user_id for r in db.query(Ticket.user_id).filter(
+                        Ticket.created_at >= start_current,
+                        Ticket.category == cat,
+                        Ticket.user_id.isnot(None)
+                    ).all()
+                ]
+                chat_count = db.query(ChatLog).filter(
                     ChatLog.created_at >= start_current,
-                    ChatLog.user_query.ilike(f"%{cat_lower}%")
-                ).count()
+                    ChatLog.user_id.in_(user_ids)
+                ).count() if user_ids else 0
             else:
-                keyword_count = 0
-            
+                chat_count = 0
+
             problem_frequency.append({
                 "category": cat,
                 "ticket_count": count,
-                "chat_count": keyword_count, 
-                "escalation_rate": f"{round((count / keyword_count * 100), 1)}%" if keyword_count > 0 else "0%"
+                "chat_count": chat_count,
+                "escalation_rate": f"{round((count / chat_count * 100), 1)}%" if chat_count > 0 else "0%"
             })
 
         return {
             "period": period,
             "chatbot_metrics": {
-                "total_interactions": current_chats,
-                "interactions_trend": chat_trend,
+                "total_questions": current_questions,
+                "questions_trend": questions_trend,
+                "total_interactions": current_interactions,
+                "interactions_trend": interactions_trend,
                 "resolution_rate": chat_resolution_rate,
                 "resolution_trend": chat_resolution_trend
             },

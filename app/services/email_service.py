@@ -56,6 +56,29 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, attachm
         raise e
 
 
+def send_password_reset_email(user_email: str, user_name: str, reset_url: str):
+    html_content = f"""
+    <div style="{BASE_STYLE}">
+      <div style="{CARD_STYLE}">
+        <h2 style="font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:8px;">Reset Password</h2>
+        <p style="color:#555;font-size:15px;margin-bottom:8px;">Halo, <strong>{user_name}</strong>.</p>
+        <p style="color:#555;font-size:14px;margin-bottom:24px;">
+          Kami menerima permintaan untuk mereset password akun Epsolve Anda.<br>
+          Klik tombol di bawah untuk membuat password baru.
+        </p>
+        <a href="{reset_url}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-bottom:24px;">
+          Reset Password
+        </a>
+        <p style="color:#888;font-size:12px;margin-top:16px;">
+          Link ini akan kadaluarsa dalam <strong>1 jam</strong>.<br>
+          Jika Anda tidak merasa meminta reset password, abaikan email ini.
+        </p>
+      </div>
+    </div>
+    """
+    send_email_via_brevo(user_email, "Reset Password - Epsolve Helpdesk", html_content)
+
+
 def send_ticket_notification(admin_emails: list[str], ticket_id: int, user_email: str, description: str, category: str):
     """Trigger email: Dikirim ke SEMUA Admin/Helpdesk yang ada di DB."""
     html_content = f"""

@@ -20,6 +20,8 @@ class User(SQLModel, table=True):
     role: UserRole = Field(default=UserRole.KARYAWAN, sa_column=Column(String, nullable=False))
     is_active: bool = Field(default=True)
     refresh_token_hash: Optional[str] = Field(default=None, nullable=True)
+    password_reset_token: Optional[str] = Field(default=None, nullable=True)
+    password_reset_token_expiry: Optional[datetime] = Field(default=None, nullable=True)
     created_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime, server_default=func.now(), nullable=False),

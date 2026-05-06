@@ -1,9 +1,18 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import SQLModel
 from app.core.config import settings
 from app.api.api_v1.api import api_router
 from app.core.logging import setup_logging
+from app.db.session import engine
+
+# Import semua model agar SQLModel.metadata mengetahui semua tabel
+import app.models.user
+import app.models.ticket
+import app.models.chat_log
+import app.models.knowledge
+import app.models.auto_report
 
 setup_logging()
 
@@ -26,6 +35,10 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+@app.on_event("startup")
+def on_startup():
+    SQLModel.metadata.create_all(engine)
 
 @app.get("/")
 def root():

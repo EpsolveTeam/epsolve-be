@@ -228,6 +228,7 @@ def update_ticket(
     if ticket_in.status is not None:
         ticket.status = ticket_in.status
 
+    ticket.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(ticket)
 
