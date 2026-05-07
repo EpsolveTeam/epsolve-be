@@ -1,40 +1,48 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from loguru import logger
-from typing import Dict, Any
-from datetime import datetime, timedelta
-from app.core.config import settings
-from app.services.email_service import send_email_via_brevo, send_analytics_report_email, generate_analytics_pdf
-from fastapi.responses import StreamingResponse
-import io
+from __future__ import annotations
 
-from app.models.user import User, UserRole
+from datetime import datetime, timedelta
+import io
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from loguru import logger
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.core.dependencies import require_admin, require_role
+from app.core.config import settings
 from app.db.session import get_session
+from app.models.chat_log import ChatLog
 from app.models.ticket import Ticket
-from app.models.chat_log import ChatLog 
+from app.models.user import User, UserRole
+from app.services.email_service import generate_analytics_pdf, send_analytics_report_email
 
 router = APIRouter()
 
+
 @router.get("/summary", response_model=Dict[str, Any])
 def get_dashboard_summary(
-    period: str = Query("30d", description="Filter periode: 7d, 1w, 1m, 30d, 3m"),
+    period: str = Query(
+        "30d", description="Filter periode: 7d, 1w, 1m, 30d, 3m"
+    ),
     db: Session = Depends(get_session),
-    current_user: User = Depends(require_admin)
+    current_user: Optional[User] = None,
 ):
+    """Mengambil data ringkasan untuk dashboard Admin.
+
+    Catatan: endpoint ini juga dipakai scheduler background.
+    Jadi `current_user` dibuat optional.
     """
-    Mengambil data ringkasan untuk dashboard Admin secara lengkap sesuai desain UI baru.
-    Menghandle insight text (Meningkat/Menurun) langsung dari backend (BFF Pattern).
-    """
-    logger.info(f"Admin {current_user.email} mengakses Analytics Dashboard (Periode: {period}).")
-    
+
+    logger.info(
+        f"Dashboard Analytics diakses. user={getattr(current_user, 'email', None) or 'Scheduler'} period={period}"
+    )
+
     try:
         now = datetime.utcnow()
-        
-        if period == "7d":
-            days = 7
-        elif period == "1w":
+
+        if period in ("7d", "1w"):
             days = 7
         elif period == "1m":
             days = 30
@@ -42,11 +50,11 @@ def get_dashboard_summary(
             days = 90
         else:
             days = 30
-            
+
         start_current = now - timedelta(days=days)
         start_previous = start_current - timedelta(days=days)
 
-        def get_trend_details(current, previous):
+        def get_trend_details(current: float, previous: float) -> Dict[str, Any]:
             if previous == 0:
                 trend_value = 100.0 if current > 0 else 0.0
             else:
@@ -62,56 +70,89 @@ def get_dashboard_summary(
                 text = "Stabil dibanding periode sebelumnya"
                 direction = "flat"
 
-            return {
-                "value": trend_value,  
-                "text": text,           
-                "direction": direction  
-            }
+            return {"value": trend_value, "text": text, "direction": direction}
 
-        total_tickets_current = db.query(Ticket).filter(Ticket.created_at >= start_current).count()
-        prev_tickets_count = db.query(Ticket).filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current).count()
+        total_tickets_current = (
+            db.query(Ticket).filter(Ticket.created_at >= start_current).count()
+        )
+        prev_tickets_count = (
+            db.query(Ticket)
+            .filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current)
+            .count()
+        )
         ticket_trend = get_trend_details(total_tickets_current, prev_tickets_count)
-        
+
         resolved_tickets = db.query(Ticket).filter(
-            Ticket.created_at >= start_current, 
-            Ticket.status.in_(["closed", "answered"])
+            Ticket.created_at >= start_current,
+            Ticket.status.in_(["closed", "answered"]),
         ).all()
+
         resolved_count = len(resolved_tickets)
-        resolution_rate = round((resolved_count / total_tickets_current * 100), 1) if total_tickets_current > 0 else 0
+        resolution_rate = (
+            round((resolved_count / total_tickets_current * 100), 1)
+            if total_tickets_current > 0
+            else 0
+        )
 
         prev_resolved_tickets = db.query(Ticket).filter(
-            Ticket.created_at >= start_previous, 
+            Ticket.created_at >= start_previous,
             Ticket.created_at < start_current,
-            Ticket.status.in_(["closed", "answered"])
+            Ticket.status.in_(["closed", "answered"]),
         ).all()
+
         prev_resolved_count = len(prev_resolved_tickets)
-        prev_resolution_rate = round((prev_resolved_count / prev_tickets_count * 100), 1) if prev_tickets_count > 0 else 0
-        
+        prev_resolution_rate = (
+            round((prev_resolved_count / prev_tickets_count * 100), 1)
+            if prev_tickets_count > 0
+            else 0
+        )
         ticket_resolution_trend = get_trend_details(resolution_rate, prev_resolution_rate)
 
-        total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in resolved_tickets if t.updated_at and t.created_at)
+        total_seconds = sum(
+            (t.updated_at - t.created_at).total_seconds()
+            for t in resolved_tickets
+            if t.updated_at and t.created_at
+        )
         avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
         avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
 
-        prev_total_seconds = sum((t.updated_at - t.created_at).total_seconds() for t in prev_resolved_tickets if t.updated_at and t.created_at)
-        prev_avg_resolution_seconds = prev_total_seconds / prev_resolved_count if prev_resolved_count > 0 else 0
+        prev_total_seconds = sum(
+            (t.updated_at - t.created_at).total_seconds()
+            for t in prev_resolved_tickets
+            if t.updated_at and t.created_at
+        )
+        prev_avg_resolution_seconds = (
+            prev_total_seconds / prev_resolved_count if prev_resolved_count > 0 else 0
+        )
         avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds)
 
         current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
-        prev_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current).count()
+        prev_chats = db.query(ChatLog).filter(
+            ChatLog.created_at >= start_previous, ChatLog.created_at < start_current
+        ).count()
         chat_trend = get_trend_details(current_chats, prev_chats)
 
-        resolved_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current, ChatLog.is_resolved == True).count()
-        chat_resolution_rate = round((resolved_chats / current_chats * 100), 1) if current_chats > 0 else 0
+        resolved_chats = db.query(ChatLog).filter(
+            ChatLog.created_at >= start_current, ChatLog.is_resolved == True
+        ).count()
+        chat_resolution_rate = (
+            round((resolved_chats / current_chats * 100), 1) if current_chats > 0 else 0
+        )
 
-        prev_resolved_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_previous, ChatLog.created_at < start_current, ChatLog.is_resolved == True).count()
-        prev_chat_resolution_rate = round((prev_resolved_chats / prev_chats * 100), 1) if prev_chats > 0 else 0
+        prev_resolved_chats = db.query(ChatLog).filter(
+            ChatLog.created_at >= start_previous,
+            ChatLog.created_at < start_current,
+            ChatLog.is_resolved == True,
+        ).count()
+        prev_chat_resolution_rate = (
+            round((prev_resolved_chats / prev_chats * 100), 1) if prev_chats > 0 else 0
+        )
         chat_resolution_trend = get_trend_details(chat_resolution_rate, prev_chat_resolution_rate)
 
         daily_stats_query = (
             db.query(
-                func.date(Ticket.created_at).label('date'),
-                func.count(Ticket.id).label('count')
+                func.date(Ticket.created_at).label("date"),
+                func.count(Ticket.id).label("count"),
             )
             .filter(Ticket.created_at >= start_current)
             .group_by(func.date(Ticket.created_at))
@@ -120,10 +161,13 @@ def get_dashboard_summary(
         )
         chart_data = [{"date": str(stat.date), "count": stat.count} for stat in daily_stats_query]
 
-        category_counts = db.query(
-            Ticket.category, 
-            func.count(Ticket.id).label("count")
-        ).filter(Ticket.created_at >= start_current).group_by(Ticket.category).order_by(func.count(Ticket.id).desc()).all()
+        category_counts = (
+            db.query(Ticket.category, func.count(Ticket.id).label("count"))
+            .filter(Ticket.created_at >= start_current)
+            .group_by(Ticket.category)
+            .order_by(func.count(Ticket.id).desc())
+            .all()
+        )
 
         problem_frequency = []
         for cat, count in category_counts:
@@ -131,17 +175,21 @@ def get_dashboard_summary(
                 cat_lower = cat.lower()
                 keyword_count = db.query(ChatLog).filter(
                     ChatLog.created_at >= start_current,
-                    ChatLog.user_query.ilike(f"%{cat_lower}%")
+                    ChatLog.user_query.ilike(f"%{cat_lower}%"),
                 ).count()
             else:
                 keyword_count = 0
-            
-            problem_frequency.append({
-                "category": cat,
-                "ticket_count": count,
-                "chat_count": keyword_count, 
-                "escalation_rate": f"{round((count / keyword_count * 100), 1)}%" if keyword_count > 0 else "0%"
-            })
+
+            problem_frequency.append(
+                {
+                    "category": cat,
+                    "ticket_count": count,
+                    "chat_count": keyword_count,
+                    "escalation_rate": f"{round((count / keyword_count * 100), 1)}%"
+                    if keyword_count > 0
+                    else "0%",
+                }
+            )
 
         return {
             "period": period,
@@ -149,7 +197,7 @@ def get_dashboard_summary(
                 "total_interactions": current_chats,
                 "interactions_trend": chat_trend,
                 "resolution_rate": chat_resolution_rate,
-                "resolution_trend": chat_resolution_trend
+                "resolution_trend": chat_resolution_trend,
             },
             "ticket_metrics": {
                 "total_escalations": total_tickets_current,
@@ -157,30 +205,29 @@ def get_dashboard_summary(
                 "resolution_rate": resolution_rate,
                 "resolution_trend": ticket_resolution_trend,
                 "avg_resolution_time": avg_resolution_time,
-                "avg_resolution_time_trend": avg_time_trend
+                "avg_resolution_time_trend": avg_time_trend,
             },
             "chart_data": chart_data,
-            "problem_frequency": problem_frequency
+            "problem_frequency": problem_frequency,
         }
-        
+
     except Exception as e:
         logger.error(f"Gagal mengambil data analytics: {str(e)}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan saat menghitung data analytics")
+
 
 @router.get("/export-pdf")
 def export_analytics_to_pdf(
     period: str = Query("30d", description="Filter periode: 7d, 1w, 1m, 30d, 3m"),
     db: Session = Depends(get_session),
-    current_user: User = Depends(require_role(UserRole.ADMIN))
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    """
-    Administrator mendownload report dalam format PDF.
-    Nama file: Laporan_DDMMYYYY-DDMMYYYY.pdf
-    """
+    """Administrator mendownload report dalam format PDF."""
+
     try:
         now = datetime.utcnow()
-        
-        if period == "7d" or period == "1w":
+
+        if period in ("7d", "1w"):
             days = 7
         elif period == "1m":
             days = 30
@@ -188,31 +235,28 @@ def export_analytics_to_pdf(
             days = 90
         else:
             days = 30
-            
+
         start_date = now - timedelta(days=days)
-        
+
         start_str = start_date.strftime("%d%m%Y")
         end_str = now.strftime("%d%m%Y")
         filename = f"Laporan_{start_str}-{end_str}.pdf"
-        
+
         tickets = db.query(Ticket).filter(Ticket.created_at >= start_date).all()
-        
+
         report_data = {
             "period": period,
             "generated_at": now.strftime("%d/%m/%Y %H:%M"),
             "start_date": start_date.strftime("%d/%m/%Y"),
             "end_date": now.strftime("%d/%m/%Y"),
-            "tickets": tickets
+            "tickets": tickets,
         }
-        
+
         pdf_bytes = generate_analytics_pdf(report_data)
-        
+
         output = io.BytesIO(pdf_bytes)
-        
-        headers = {
-            'Content-Disposition': f'attachment; filename="{filename}"'
-        }
-        return StreamingResponse(output, headers=headers, media_type='application/pdf')
+        headers = {"Content-Disposition": f"attachment; filename=\"{filename}\""}
+        return StreamingResponse(output, headers=headers, media_type="application/pdf")
 
     except Exception as e:
         logger.error(f"Gagal generate PDF: {e}")
@@ -220,35 +264,64 @@ def export_analytics_to_pdf(
 
 
 @router.post("/distribute-report")
-def distribute_report(
-    background_tasks: BackgroundTasks,
-    recipient_email: str = Query(..., description="Email penerima laporan"),
-    period: str = Query(..., description="Periode laporan: 3m, 1m, 1w"),
-    db: Session = Depends(get_session),
-    current_user: User = Depends(require_admin)
-):
-    """
-    Mengirim laporan otomatis ke email yang ditentukan berdasarkan periode.
-    Periode: 3m (3 bulan), 1m (1 bulan), 1w (1 minggu).
-    """
-    try:
-        period_days = {"3m": 90, "1m": 30, "1w": 7}
-        if period not in period_days:
-            raise HTTPException(status_code=400, detail="Periode tidak valid. Gunakan: 3m, 1m, 1w")
-        
-        report_data = get_dashboard_summary(period=period, db=db, current_user=current_user)
-        
-        background_tasks.add_task(
-            send_analytics_report_email,
-            user_email=recipient_email,
-            user_name="Penerima",
-            report_data=report_data
-        )
-        
-        return {"message": f"Laporan berhasil dikirim ke {recipient_email}."}
+def distribute_report(*args, **kwargs):
+    raise HTTPException(
+        status_code=410,
+        detail="Gunakan /analytics/report-settings untuk menyimpan konfigurasi.",
+    )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Gagal distribusi laporan: {e}")
-        raise HTTPException(status_code=500, detail="Terjadi kesalahan saat mendistribusikan laporan")
+
+from app.models.report_setting import ReportSetting
+from app.schemas.report_settings import ReportSettingInput
+
+
+@router.post("/report-settings")
+def save_report_settings(
+    setting_in: ReportSettingInput,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
+    """Menyimpan konfigurasi pengiriman laporan otomatis (scheduler)."""
+
+    valid_periods = ["1w", "1m", "3m"]
+    if setting_in.period not in valid_periods:
+        raise HTTPException(
+            status_code=400,
+            detail="Periode tidak valid. Gunakan: 1w, 1m, 3m",
+        )
+
+    existing_setting = (
+        db.query(ReportSetting)
+        .filter(ReportSetting.recipient_email == setting_in.recipient_email)
+        .first()
+    )
+
+    if existing_setting:
+        existing_setting.period = setting_in.period
+        existing_setting.is_active = True
+        message = "Konfigurasi laporan berhasil diperbarui."
+    else:
+        new_setting = ReportSetting(
+            recipient_email=setting_in.recipient_email,
+            period=setting_in.period,
+        )
+        db.add(new_setting)
+        message = "Konfigurasi laporan berhasil disimpan."
+
+    db.commit()
+    logger.info(
+        f"Admin {current_user.email} menyimpan konfigurasi report untuk {setting_in.recipient_email}"
+    )
+    return {"message": message}
+
+
+@router.get("/report-settings")
+def get_report_settings(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
+    """Mengambil list konfigurasi untuk ditampilkan di UI."""
+
+    settings = db.query(ReportSetting).all()
+    return settings
+
