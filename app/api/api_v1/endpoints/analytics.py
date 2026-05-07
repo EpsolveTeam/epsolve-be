@@ -80,16 +80,20 @@ def get_dashboard_summary(
 
             return {"value": trend_value, "text": text, "direction": direction}
 
-        total_tickets_current = db.query(Ticket).filter(Ticket.created_at >= start_current).count()
+        # Convert to naive UTC for database comparison (matches stored DB timestamps)
+        start_current_naive = start_current.replace(tzinfo=None)
+        start_previous_naive = start_previous.replace(tzinfo=None)
+
+        total_tickets_current = db.query(Ticket).filter(Ticket.created_at >= start_current_naive).count()
         prev_tickets_count = (
             db.query(Ticket)
-            .filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current)
+            .filter(Ticket.created_at >= start_previous_naive, Ticket.created_at < start_current_naive)
             .count()
         )
         ticket_trend = get_trend_details(total_tickets_current, prev_tickets_count)
 
         resolved_tickets = db.query(Ticket).filter(
-            Ticket.created_at >= start_current,
+            Ticket.created_at >= start_current_naive,
             Ticket.status.in_(["closed", "answered"]),
         ).all()
 
@@ -101,8 +105,8 @@ def get_dashboard_summary(
         )
 
         prev_resolved_tickets = db.query(Ticket).filter(
-            Ticket.created_at >= start_previous,
-            Ticket.created_at < start_current,
+            Ticket.created_at >= start_previous_naive,
+            Ticket.created_at < start_current_naive,
             Ticket.status.in_(["closed", "answered"]),
         ).all()
 
@@ -132,15 +136,15 @@ def get_dashboard_summary(
         )
         avg_time_trend = get_trend_details(avg_resolution_seconds, prev_avg_resolution_seconds)
 
-        current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
+        current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current_naive).count()
         prev_chats = db.query(ChatLog).filter(
-            ChatLog.created_at >= start_previous,
-            ChatLog.created_at < start_current,
+            ChatLog.created_at >= start_previous_naive,
+            ChatLog.created_at < start_current_naive,
         ).count()
         chat_trend = get_trend_details(current_chats, prev_chats)
 
         resolved_chats = db.query(ChatLog).filter(
-            ChatLog.created_at >= start_current,
+            ChatLog.created_at >= start_current_naive,
             ChatLog.is_resolved == True,
         ).count()
         chat_resolution_rate = (
@@ -148,8 +152,8 @@ def get_dashboard_summary(
         )
 
         prev_resolved_chats = db.query(ChatLog).filter(
-            ChatLog.created_at >= start_previous,
-            ChatLog.created_at < start_current,
+            ChatLog.created_at >= start_previous_naive,
+            ChatLog.created_at < start_current_naive,
             ChatLog.is_resolved == True,
         ).count()
         prev_chat_resolution_rate = (
@@ -162,7 +166,7 @@ def get_dashboard_summary(
                 func.date(Ticket.created_at).label("date"),
                 func.count(Ticket.id).label("count"),
             )
-            .filter(Ticket.created_at >= start_current)
+            .filter(Ticket.created_at >= start_current_naive)
             .group_by(func.date(Ticket.created_at))
             .order_by(func.date(Ticket.created_at))
             .all()
@@ -171,7 +175,7 @@ def get_dashboard_summary(
 
         category_counts = (
             db.query(Ticket.category, func.count(Ticket.id).label("count"))
-            .filter(Ticket.created_at >= start_current)
+            .filter(Ticket.created_at >= start_current_naive)
             .group_by(Ticket.category)
             .order_by(func.count(Ticket.id).desc())
             .all()
@@ -182,7 +186,7 @@ def get_dashboard_summary(
             if cat:
                 cat_lower = cat.lower()
                 keyword_count = db.query(ChatLog).filter(
-                    ChatLog.created_at >= start_current,
+                    ChatLog.created_at >= start_current_naive,
                     ChatLog.user_query.ilike(f"%{cat_lower}%"),
                 ).count()
             else:
@@ -248,12 +252,14 @@ def export_analytics_to_pdf(
             days = 30
 
         start_date = now - timedelta(days=days)
+        # Convert to naive for DB comparison
+        start_date_naive = start_date.replace(tzinfo=None)
 
         start_str = start_date.strftime("%d%m%Y")
         end_str = now.strftime("%d%m%Y")
         filename = f"Laporan_{start_str}-{end_str}.pdf"
 
-        tickets = db.query(Ticket).filter(Ticket.created_at >= start_date).all()
+        tickets = db.query(Ticket).filter(Ticket.created_at >= start_date_naive).all()
 
         report_data = {
             "period": period,

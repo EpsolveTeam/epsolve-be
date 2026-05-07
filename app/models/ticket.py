@@ -1,6 +1,6 @@
 from uuid import UUID
 from sqlmodel import SQLModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 class Ticket(SQLModel, table=True):
@@ -14,5 +14,5 @@ class Ticket(SQLModel, table=True):
     admin_response: Optional[str] = Field(default=None)
     image_url: Optional[str] = None
     status: str = Field(default="open")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = Field(default=None)

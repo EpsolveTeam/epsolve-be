@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -30,7 +30,7 @@ def get_days_required(period: str) -> float:
 
 def check_and_send_scheduled_reports() -> None:
     logger.info("Mengecek jadwal pengiriman report otomatis...")
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     with Session(engine) as db:
         active_settings = (

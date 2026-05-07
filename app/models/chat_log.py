@@ -1,6 +1,6 @@
 from uuid import UUID
 from sqlmodel import SQLModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 class ChatLog(SQLModel, table=True):
@@ -11,4 +11,4 @@ class ChatLog(SQLModel, table=True):
     image_query_url: Optional[str] = None
     bot_response: str
     is_resolved: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 class ReportSetting(SQLModel, table=True):
     __tablename__ = "report_setting"
