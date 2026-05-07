@@ -27,6 +27,7 @@ jobs:
           target: "/tmp"
           port: 22
           timeout: 300s
+          debug: true
 
       - name: Execute remote deployment script
         uses: appleboy/ssh-action@master
