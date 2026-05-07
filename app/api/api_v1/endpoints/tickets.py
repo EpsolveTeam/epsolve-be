@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -190,7 +190,7 @@ def update_ticket(
 
     if ticket_in.admin_response is not None:
         ticket.admin_response = ticket_in.admin_response
-        ticket.updated_at = datetime.utcnow()
+        ticket.updated_at = datetime.now(timezone.utc)
 
         if ticket_in.status is None and old_status == "open":
             ticket.status = "answered"
@@ -228,7 +228,7 @@ def update_ticket(
     if ticket_in.status is not None:
         ticket.status = ticket_in.status
 
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ticket)
 

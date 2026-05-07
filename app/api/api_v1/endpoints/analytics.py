@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import io
 from typing import Any, Dict, Optional
 
@@ -44,9 +44,6 @@ def get_dashboard_summary(
     )
 
     try:
-        # Use timezone-aware UTC to avoid naive/aware subtraction errors
-        from datetime import timezone
-
         now = datetime.now(timezone.utc)
 
         if period in ("7d", "1w"):
@@ -61,6 +58,13 @@ def get_dashboard_summary(
 
         start_current = now - timedelta(days=days)
         start_previous = start_current - timedelta(days=days)
+
+        def to_utc(dt: datetime) -> datetime:
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
 
         def get_trend_details(current: float, previous: float) -> Dict[str, Any]:
             if previous == 0:
@@ -119,7 +123,7 @@ def get_dashboard_summary(
         ticket_resolution_trend = get_trend_details(resolution_rate, prev_resolution_rate)
 
         total_seconds = sum(
-            (t.updated_at - t.created_at).total_seconds()
+            (to_utc(t.updated_at) - to_utc(t.created_at)).total_seconds()
             for t in resolved_tickets
             if t.updated_at and t.created_at
         )
@@ -127,7 +131,7 @@ def get_dashboard_summary(
         avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
 
         prev_total_seconds = sum(
-            (t.updated_at - t.created_at).total_seconds()
+            (to_utc(t.updated_at) - to_utc(t.created_at)).total_seconds()
             for t in prev_resolved_tickets
             if t.updated_at and t.created_at
         )
@@ -237,9 +241,6 @@ def export_analytics_to_pdf(
     """Administrator mendownload report dalam format PDF."""
 
     try:
-        # Use timezone-aware UTC to avoid naive/aware subtraction errors
-        from datetime import timezone
-
         now = datetime.now(timezone.utc)
 
         if period in ("7d", "1w"):
