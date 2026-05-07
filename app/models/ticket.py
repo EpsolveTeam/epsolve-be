@@ -14,5 +14,6 @@ class Ticket(SQLModel, table=True):
     admin_response: Optional[str] = Field(default=None)
     image_url: Optional[str] = None
     status: str = Field(default="open")
+    is_escalation: bool = Field(default=True)  # True if from chatbot, False if direct ticket
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = Field(default=None)

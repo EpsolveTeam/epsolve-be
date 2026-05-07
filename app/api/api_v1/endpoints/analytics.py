@@ -88,13 +88,24 @@ def get_dashboard_summary(
         start_current_naive = start_current.replace(tzinfo=None)
         start_previous_naive = start_previous.replace(tzinfo=None)
 
-        total_tickets_current = db.query(Ticket).filter(Ticket.created_at >= start_current_naive).count()
-        prev_tickets_count = (
+        total_questions_current = db.query(Ticket).filter(Ticket.created_at >= start_current_naive, Ticket.is_escalation == False).count()
+        prev_questions_count = (
             db.query(Ticket)
-            .filter(Ticket.created_at >= start_previous_naive, Ticket.created_at < start_current_naive)
+            .filter(Ticket.created_at >= start_previous_naive, Ticket.created_at < start_current_naive, Ticket.is_escalation == False)
             .count()
         )
-        ticket_trend = get_trend_details(total_tickets_current, prev_tickets_count)
+        questions_trend = get_trend_details(total_questions_current, prev_questions_count)
+
+        total_escalations_current = db.query(Ticket).filter(Ticket.created_at >= start_current_naive, Ticket.is_escalation == True).count()
+        prev_escalations_count = (
+            db.query(Ticket)
+            .filter(Ticket.created_at >= start_previous_naive, Ticket.created_at < start_current_naive, Ticket.is_escalation == True)
+            .count()
+        )
+        escalations_trend = get_trend_details(total_escalations_current, prev_escalations_count)
+
+        total_tickets_current = total_questions_current + total_escalations_current
+        prev_tickets_count = prev_questions_count + prev_escalations_count
 
         resolved_tickets = db.query(Ticket).filter(
             Ticket.created_at >= start_current_naive,
@@ -225,8 +236,10 @@ def get_dashboard_summary(
                 "resolution_trend": chat_resolution_trend,
             },
             "ticket_metrics": {
-                "total_escalations": total_tickets_current,
-                "escalations_trend": ticket_trend,
+                "total_questions": total_questions_current,
+                "questions_trend": questions_trend,
+                "total_escalations": total_escalations_current,
+                "escalations_trend": escalations_trend,
                 "resolution_rate": resolution_rate,
                 "resolution_trend": ticket_resolution_trend,
                 "avg_resolution_time": avg_resolution_time,

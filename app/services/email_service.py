@@ -301,7 +301,9 @@ def generate_analytics_pdf(report_data: dict) -> bytes:
         elements.append(Paragraph("Ringkasan Tiket", heading_style))
         summary_data = [
             ["Metric", "Nilai"],
+            ["Total pertanyaan", str(ticket_metrics.get("total_questions", "-"))],
             ["Total eskalasi", str(ticket_metrics.get("total_escalations", "-"))],
+            ["Tren pertanyaan", ticket_metrics.get("questions_trend", {}).get("text", "-")],
             ["Tren eskalasi", ticket_metrics.get("escalations_trend", {}).get("text", "-")],
             ["Persentase penyelesaian", f"{ticket_metrics.get('resolution_rate', 0)}%"],
             ["Tren penyelesaian", ticket_metrics.get("resolution_trend", {}).get("text", "-")],
