@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -15,6 +16,17 @@ from app.services.email_service import send_analytics_report_email
 
 PERIOD_DAYS = {"1w": 7, "1m": 30, "3m": 90}
 
+# For testing: override period to send faster (in minutes)
+# Set SCHEDULER_TEST_PERIOD_MINUTES=1 to make "1w" send every 1 minute
+TEST_PERIOD_MINUTES = int(os.getenv("SCHEDULER_TEST_PERIOD_MINUTES", "0"))
+
+
+def get_days_required(period: str) -> float:
+    """Get days required for a period, with optional test override."""
+    if TEST_PERIOD_MINUTES > 0 and period == "1w":
+        return TEST_PERIOD_MINUTES / (60 * 24)  # Convert minutes to days
+    return PERIOD_DAYS.get(period, 30)
+
 
 def check_and_send_scheduled_reports() -> None:
     logger.info("Mengecek jadwal pengiriman report otomatis...")
@@ -26,7 +38,7 @@ def check_and_send_scheduled_reports() -> None:
         )
 
         for setting in active_settings:
-            days_required = PERIOD_DAYS.get(setting.period, 30)
+            days_required = get_days_required(setting.period)
             last_sent_at: Optional[datetime] = setting.last_sent_at
 
             due = (not last_sent_at) or ((now - last_sent_at) >= timedelta(days=days_required))
