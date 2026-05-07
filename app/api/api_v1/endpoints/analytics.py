@@ -4,18 +4,20 @@ from datetime import datetime, timedelta
 import io
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import require_admin, require_role
 from app.core.config import settings
+from app.core.dependencies import require_admin, require_role
 from app.db.session import get_session
 from app.models.chat_log import ChatLog
+from app.models.report_setting import ReportSetting
 from app.models.ticket import Ticket
 from app.models.user import User, UserRole
+from app.schemas.report_settings import ReportSettingInput
 from app.services.email_service import generate_analytics_pdf, send_analytics_report_email
 
 router = APIRouter()
@@ -36,7 +38,9 @@ def get_dashboard_summary(
     """
 
     logger.info(
-        f"Dashboard Analytics diakses. user={getattr(current_user, 'email', None) or 'Scheduler'} period={period}"
+        "Dashboard Analytics diakses. user=%s period=%s",
+        getattr(current_user, "email", None) or "Scheduler",
+        period,
     )
 
     try:
@@ -72,9 +76,7 @@ def get_dashboard_summary(
 
             return {"value": trend_value, "text": text, "direction": direction}
 
-        total_tickets_current = (
-            db.query(Ticket).filter(Ticket.created_at >= start_current).count()
-        )
+        total_tickets_current = db.query(Ticket).filter(Ticket.created_at >= start_current).count()
         prev_tickets_count = (
             db.query(Ticket)
             .filter(Ticket.created_at >= start_previous, Ticket.created_at < start_current)
@@ -128,12 +130,14 @@ def get_dashboard_summary(
 
         current_chats = db.query(ChatLog).filter(ChatLog.created_at >= start_current).count()
         prev_chats = db.query(ChatLog).filter(
-            ChatLog.created_at >= start_previous, ChatLog.created_at < start_current
+            ChatLog.created_at >= start_previous,
+            ChatLog.created_at < start_current,
         ).count()
         chat_trend = get_trend_details(current_chats, prev_chats)
 
         resolved_chats = db.query(ChatLog).filter(
-            ChatLog.created_at >= start_current, ChatLog.is_resolved == True
+            ChatLog.created_at >= start_current,
+            ChatLog.is_resolved == True,
         ).count()
         chat_resolution_rate = (
             round((resolved_chats / current_chats * 100), 1) if current_chats > 0 else 0
@@ -265,14 +269,11 @@ def export_analytics_to_pdf(
 
 @router.post("/distribute-report")
 def distribute_report(*args, **kwargs):
+    # Legacy endpoint disabled to enforce scheduler-based delivery.
     raise HTTPException(
         status_code=410,
-        detail="Gunakan /analytics/report-settings untuk menyimpan konfigurasi.",
+        detail="Endpoint /distribute-report sudah tidak aktif. Gunakan /analytics/report-settings untuk menyimpan konfigurasi.",
     )
-
-
-from app.models.report_setting import ReportSetting
-from app.schemas.report_settings import ReportSettingInput
 
 
 @router.post("/report-settings")
@@ -322,6 +323,6 @@ def get_report_settings(
 ):
     """Mengambil list konfigurasi untuk ditampilkan di UI."""
 
-    settings = db.query(ReportSetting).all()
-    return settings
+    rows = db.query(ReportSetting).all()
+    return rows
 

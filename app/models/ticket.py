@@ -15,3 +15,4 @@ class Ticket(SQLModel, table=True):
     image_url: Optional[str] = None
     status: str = Field(default="open")
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = Field(default=None)

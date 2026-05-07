@@ -9,7 +9,6 @@ from loguru import logger
 
 setup_logging()
 
-
 env_state = os.getenv("ENV_STATE", "")
 current_root_path = f"/{env_state}" if env_state in ["dev", "prod"] else ""
 
@@ -17,7 +16,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Backend API Epsolve",
     version="1.0.0",
-    root_path=current_root_path 
+    root_path=current_root_path,
 )
 
 app.add_middleware(
@@ -30,16 +29,11 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+
 @app.on_event("startup")
 def start_scheduler():
     scheduler.start()
-    logger_msg = "Background Scheduler Started!"
-    try:
-        from loguru import logger
-
-        logger.info(logger_msg)
-    except Exception:
-        pass
+    logger.info("🤖 Background Scheduler Started!")
 
 
 @app.on_event("shutdown")
@@ -53,5 +47,6 @@ def root():
         "message": f"Welcome to {settings.PROJECT_NAME} API",
         "status": "online",
         "environment": env_state if env_state else "local",
-        "docs": f"{current_root_path}/docs"
+        "docs": f"{current_root_path}/docs",
     }
+
