@@ -294,7 +294,81 @@ def generate_analytics_pdf(report_data: dict) -> bytes:
     elements.append(Spacer(1, 20))
     
     tickets = report_data.get('tickets', [])
-    
+    ticket_metrics = report_data.get('ticket_metrics', {})
+    chatbot_metrics = report_data.get('chatbot_metrics', {})
+
+    if ticket_metrics:
+        elements.append(Paragraph("Ringkasan Tiket", heading_style))
+        summary_data = [
+            ["Metric", "Nilai"],
+            ["Total eskalasi", str(ticket_metrics.get("total_escalations", "-"))],
+            ["Tren eskalasi", ticket_metrics.get("escalations_trend", {}).get("text", "-")],
+            ["Persentase penyelesaian", f"{ticket_metrics.get('resolution_rate', 0)}%"],
+            ["Tren penyelesaian", ticket_metrics.get("resolution_trend", {}).get("text", "-")],
+            ["Rata-rata waktu penyelesaian", ticket_metrics.get("avg_resolution_time", "-")],
+            ["Tren waktu rata-rata", ticket_metrics.get("avg_resolution_time_trend", {}).get("text", "-")],
+        ]
+        table = Table(summary_data, colWidths=[2.5*inch, 3.5*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.beige]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 16))
+
+    if chatbot_metrics:
+        elements.append(Paragraph("Ringkasan Chatbot", heading_style))
+        chatbot_data = [
+            ["Metric", "Nilai"],
+            ["Total interaksi", str(chatbot_metrics.get("total_interactions", "-"))],
+            ["Tren interaksi", chatbot_metrics.get("interactions_trend", {}).get("text", "-")],
+            ["Persentase penyelesaian", f"{chatbot_metrics.get('resolution_rate', 0)}%"],
+            ["Tren penyelesaian", chatbot_metrics.get("resolution_trend", {}).get("text", "-")],
+        ]
+        table = Table(chatbot_data, colWidths=[2.5*inch, 3.5*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.beige]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 16))
+
+    if report_data.get('problem_frequency'):
+        elements.append(Paragraph("Frekuensi Masalah Teratas", heading_style))
+        freq_data = [["Kategori", "Jumlah Tiket", "Jumlah Chat", "Tingkat Eskalasi"]]
+        for item in report_data.get('problem_frequency', [])[:8]:
+            freq_data.append([
+                item.get('category', '-'),
+                str(item.get('ticket_count', '-')),
+                str(item.get('chat_count', '-')),
+                item.get('escalation_rate', '-')
+            ])
+        table = Table(freq_data, colWidths=[2.5*inch, 1*inch, 1*inch, 1.5*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.beige]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 16))
+
     heading = Paragraph("Daftar Tiket", heading_style)
     elements.append(heading)
     elements.append(Spacer(1, 8))

@@ -128,7 +128,16 @@ def get_dashboard_summary(
             if t.updated_at and t.created_at
         )
         avg_resolution_seconds = total_seconds / resolved_count if resolved_count > 0 else 0
-        avg_resolution_time = str(timedelta(seconds=int(avg_resolution_seconds)))
+
+        def format_duration(seconds: float) -> str:
+            days = int(seconds // 86400)
+            seconds = int(seconds % 86400)
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            seconds = seconds % 60
+            return f"{days:02d}:{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+        avg_resolution_time = format_duration(avg_resolution_seconds)
 
         prev_total_seconds = sum(
             (to_utc(t.updated_at) - to_utc(t.created_at)).total_seconds()
@@ -261,6 +270,7 @@ def export_analytics_to_pdf(
         filename = f"Laporan_{start_str}-{end_str}.pdf"
 
         tickets = db.query(Ticket).filter(Ticket.created_at >= start_date_naive).all()
+        dashboard_summary = get_dashboard_summary(period=period, db=db)
 
         report_data = {
             "period": period,
@@ -268,6 +278,9 @@ def export_analytics_to_pdf(
             "start_date": start_date.strftime("%d/%m/%Y"),
             "end_date": now.strftime("%d/%m/%Y"),
             "tickets": tickets,
+            "ticket_metrics": dashboard_summary.get("ticket_metrics", {}),
+            "chatbot_metrics": dashboard_summary.get("chatbot_metrics", {}),
+            "problem_frequency": dashboard_summary.get("problem_frequency", []),
         }
 
         pdf_bytes = generate_analytics_pdf(report_data)
