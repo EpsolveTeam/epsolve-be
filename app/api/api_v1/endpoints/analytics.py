@@ -44,9 +44,13 @@ def get_dashboard_summary(
     )
 
     try:
-        now = datetime.utcnow()
+        # Use timezone-aware UTC to avoid naive/aware subtraction errors
+        from datetime import timezone
+
+        now = datetime.now(timezone.utc)
 
         if period in ("7d", "1w"):
+
             days = 7
         elif period == "1m":
             days = 30
@@ -229,7 +233,10 @@ def export_analytics_to_pdf(
     """Administrator mendownload report dalam format PDF."""
 
     try:
-        now = datetime.utcnow()
+        # Use timezone-aware UTC to avoid naive/aware subtraction errors
+        from datetime import timezone
+
+        now = datetime.now(timezone.utc)
 
         if period in ("7d", "1w"):
             days = 7
@@ -265,15 +272,6 @@ def export_analytics_to_pdf(
     except Exception as e:
         logger.error(f"Gagal generate PDF: {e}")
         raise HTTPException(status_code=500, detail="Gagal mengunduh laporan PDF")
-
-
-@router.post("/distribute-report")
-def distribute_report(*args, **kwargs):
-    # Legacy endpoint disabled to enforce scheduler-based delivery.
-    raise HTTPException(
-        status_code=410,
-        detail="Endpoint /distribute-report sudah tidak aktif. Gunakan /analytics/report-settings untuk menyimpan konfigurasi.",
-    )
 
 
 @router.post("/report-settings")
