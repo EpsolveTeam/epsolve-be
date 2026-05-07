@@ -35,6 +35,7 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          timeout: 1800s
           script: |
             if [ "${{ github.ref_name }}" == "main" ]; then
               APP_DIR="/home/ubuntu/epsolve/prod"
