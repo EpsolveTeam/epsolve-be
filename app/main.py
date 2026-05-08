@@ -19,8 +19,7 @@ app = FastAPI(
     root_path=current_root_path,
 )
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
-
+allowed_origins = settings.ALLOWED_ORIGINS
 origins = [origin.strip() for origin in allowed_origins.split(",") if origin]
 
 app.add_middleware(

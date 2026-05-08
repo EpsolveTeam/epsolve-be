@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7               # 7 hari
     PASSWORD_RESET_EXPIRE_MINUTES: int = 60          # 1 jam
     FRONTEND_URL: str = "http://localhost:5173"
+    ALLOWED_ORIGINS: str
 
     model_config = SettingsConfigDict(
         env_file=f".env.{ENV_STATE}",
