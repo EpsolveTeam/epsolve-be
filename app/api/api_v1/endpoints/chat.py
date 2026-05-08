@@ -151,26 +151,59 @@ class ChatSessionItem(BaseModel):
 @router.get("/sessions", response_model=List[ChatSessionItem])
 def get_chat_sessions(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user) 
+    current_user: User = Depends(get_current_user)
 ):
     """
     Mengambil daftar riwayat sesi chat user untuk ditampilkan di Sidebar.
     Judul (title) diambil dari pertanyaan pertama user di sesi tersebut.
     """
     chats = db.query(ChatLog).filter(ChatLog.user_id == current_user.id).order_by(asc(ChatLog.created_at)).all()
-    
+
     sessions_dict = {}
-    
+
     for chat in chats:
         if chat.session_id not in sessions_dict:
             title = (chat.user_query[:30] + '...') if len(chat.user_query) > 30 else chat.user_query
-            
+
             sessions_dict[chat.session_id] = {
                 "session_id": chat.session_id,
                 "title": title,
                 "created_at": chat.created_at
             }
-            
+
     result = list(sessions_dict.values())
-    
+
     return result
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_chat_session(
+    session_id: str,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Endpoint untuk menghapus sesi chat beserta semua riwayatnya.
+    Karyawan hanya bisa hapus sesi miliknya sendiri; admin bisa hapus semua.
+    """
+    logger.info(f"Menghapus sesi chat: {session_id} oleh {current_user.email}")
+
+    query = db.query(ChatLog).filter(ChatLog.session_id == session_id)
+
+    if current_user.role != UserRole.ADMIN:
+        query = query.filter(ChatLog.user_id == current_user.id)
+
+    chat_logs = query.all()
+
+    if not chat_logs:
+        logger.warning(f"Sesi chat tidak ditemukan untuk session_id: {session_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sesi chat tidak ditemukan"
+        )
+
+    for chat_log in chat_logs:
+        db.delete(chat_log)
+
+    db.commit()
+
+    logger.success(f"Sesi chat {session_id} berhasil dihapus ({len(chat_logs)} riwayat)")
