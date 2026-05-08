@@ -41,6 +41,10 @@ def check_and_send_scheduled_reports() -> None:
             days_required = get_days_required(setting.period)
             last_sent_at: Optional[datetime] = setting.last_sent_at
 
+            # Ensure last_sent_at is timezone-aware for comparison
+            if last_sent_at and last_sent_at.tzinfo is None:
+                last_sent_at = last_sent_at.replace(tzinfo=timezone.utc)
+
             due = (not last_sent_at) or ((now - last_sent_at) >= timedelta(days=days_required))
             if not due:
                 continue
@@ -77,9 +81,9 @@ def check_and_send_scheduled_reports() -> None:
 
 scheduler = BackgroundScheduler()
 
-# Dev / testing: cek setiap 1 menit
-scheduler.add_job(check_and_send_scheduled_reports, "interval", minutes=1)
+# Production: cek setiap hari pukul 8 pagi
+scheduler.add_job(check_and_send_scheduled_reports, 'cron', hour=8, minute=0)
 
-# Production option:
-# scheduler.add_job(check_and_send_scheduled_reports, 'cron', hour=8, minute=0)
+# Development option (uncomment for testing):
+# scheduler.add_job(check_and_send_scheduled_reports, "interval", minutes=1)
 

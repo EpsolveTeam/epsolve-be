@@ -29,7 +29,7 @@ def get_dashboard_summary(
         "30d", description="Filter periode: 7d, 1w, 1m, 30d, 3m"
     ),
     db: Session = Depends(get_session),
-    current_user: Optional[User] = None,
+    current_user: User = Depends(require_admin),
 ):
     """Mengambil data ringkasan untuk dashboard Admin.
 
