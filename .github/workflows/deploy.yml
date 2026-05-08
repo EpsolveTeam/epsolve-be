@@ -68,6 +68,7 @@ jobs:
             GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}"
             BREVO_API_KEY="${{ secrets.BREVO_API_KEY }}"
             BREVO_SENDER_EMAIL="${{ secrets.BREVO_SENDER_EMAIL }}"
+            ALLOWED_ORIGINS="${{ secrets.ALLOWED_ORIGINS }}"
             HF_HOME="/tmp/hf_cache"
             HF_HUB_CACHE="/tmp/hf_cache/hub"
             EOF
