@@ -90,3 +90,12 @@
 2026-05-06 14:40:16 | INFO     | app.api.api_v1.endpoints.analytics:save_auto_report_settings:57 - Auto-report setting diperbarui oleh adminbe@epsolve.com: period=off, email=
 2026-05-06 14:49:17 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 3m).
 2026-05-06 14:49:20 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 3m).
+2026-05-06 14:59:54 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 3m).
+2026-05-06 14:59:57 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 3m).
+2026-05-06 14:59:58 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 7d).
+2026-05-06 15:32:02 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 3m).
+2026-05-06 15:32:05 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 3m).
+2026-05-06 15:32:06 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 7d).
+2026-05-06 15:32:19 | INFO     | app.api.api_v1.endpoints.analytics:save_auto_report_settings:57 - Auto-report setting diperbarui oleh adminbe@epsolve.com: period=3m, email=andhikap2323@gmail.com
+2026-05-06 15:32:26 | INFO     | app.api.api_v1.endpoints.analytics:save_auto_report_settings:57 - Auto-report setting diperbarui oleh adminbe@epsolve.com: period=off, email=
+2026-05-06 15:32:44 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:70 - Admin adminbe@epsolve.com mengakses Analytics Dashboard (Periode: 3m).
