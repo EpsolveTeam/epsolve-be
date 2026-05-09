@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 6        # 6 jam
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7               # 7 hari
     PASSWORD_RESET_EXPIRE_MINUTES: int = 60          # 1 jam
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str
     ALLOWED_ORIGINS: str
 
     model_config = SettingsConfigDict(
