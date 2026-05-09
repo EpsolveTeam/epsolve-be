@@ -131,10 +131,10 @@ jobs:
             fi
 
             # Check HTTP endpoint (FastAPI docs)
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/docs)
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/)
             if [ "$HTTP_CODE" != "200" ]; then
                 echo "❌ Deployment failed: API health check returned HTTP $HTTP_CODE (expected 200)."
-                pm2 logs $NAME --lines 50 --no-daemon & sleep 5 && kill $!
+                pm2 logs $NAME --lines 80 --no-daemon & sleep 5 && kill $!
                 exit 1
             fi
 
