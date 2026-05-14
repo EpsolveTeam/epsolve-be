@@ -167,6 +167,13 @@ def get_dashboard_summary(
         ).count()
         chat_trend = get_trend_details(current_chats, prev_chats)
 
+        current_chat_sessions = db.query(ChatLog.session_id).filter(ChatLog.created_at >= start_current_naive).distinct().count()
+        prev_chat_sessions = db.query(ChatLog.session_id).filter(
+            ChatLog.created_at >= start_previous_naive,
+            ChatLog.created_at < start_current_naive,
+        ).distinct().count()
+        chat_sessions_trend = get_trend_details(current_chat_sessions, prev_chat_sessions)
+
         resolved_chats = db.query(ChatLog).filter(
             ChatLog.created_at >= start_current_naive,
             ChatLog.is_resolved == True,
@@ -230,6 +237,8 @@ def get_dashboard_summary(
         return {
             "period": period,
             "chatbot_metrics": {
+                "total_sessions": current_chat_sessions,
+                "sessions_trend": chat_sessions_trend,
                 "total_interactions": current_chats,
                 "interactions_trend": chat_trend,
                 "resolution_rate": chat_resolution_rate,
