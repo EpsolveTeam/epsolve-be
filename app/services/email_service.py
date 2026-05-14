@@ -328,8 +328,8 @@ def generate_analytics_pdf(report_data: dict) -> bytes:
         elements.append(Paragraph("Ringkasan Chatbot", heading_style))
         chatbot_data = [
             ["Metric", "Nilai"],
-            ["Total interaksi", str(chatbot_metrics.get("total_interactions", "-"))],
-            ["Tren interaksi", chatbot_metrics.get("interactions_trend", {}).get("text", "-")],
+            ["Total Interaksi", str(chatbot_metrics.get("total_sessions", "-"))],
+            ["Tren Interaksi", chatbot_metrics.get("sessions_trend", {}).get("text", "-")],
             ["Persentase penyelesaian", f"{chatbot_metrics.get('resolution_rate', 0)}%"],
             ["Tren penyelesaian", chatbot_metrics.get("resolution_trend", {}).get("text", "-")],
         ]
@@ -341,6 +341,30 @@ def generate_analytics_pdf(report_data: dict) -> bytes:
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.beige]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 16))
+
+
+    chart_data = report_data.get('chart_data', [])
+    if chart_data:
+        elements.append(Paragraph("Data Per Hari (Ticket)", heading_style))
+        chart_rows = [["Tanggal", "Jumlah Ticket"]]
+        for row in chart_data[:31]:
+            chart_rows.append([
+                str(row.get('date', '-')),
+                str(row.get('count', '-')),
+            ])
+        table = Table(chart_rows, colWidths=[2.6*inch, 3.4*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.beige]),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ]))
@@ -372,6 +396,7 @@ def generate_analytics_pdf(report_data: dict) -> bytes:
         elements.append(Spacer(1, 16))
 
     heading = Paragraph("Daftar Tiket", heading_style)
+
     elements.append(heading)
     elements.append(Spacer(1, 8))
     
@@ -402,7 +427,9 @@ def generate_analytics_pdf(report_data: dict) -> bytes:
     else:
         elements.append(Paragraph("Tidak ada data tiket.", normal_style))
     
+
     doc.build(elements)
-    
+
     output.seek(0)
     return output.getvalue()
+
