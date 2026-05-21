@@ -135,3 +135,55 @@
 2026-05-09 07:35:33 | ERROR    | app.services.rag_service:generate_response:90 - LLM generation failed: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash-lite\nPlease retry in 27.585504081s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'model': 'gemini-2.5-flash-lite', 'location': 'global'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '27s'}]}}
 2026-05-09 07:35:33 | ERROR    | app.api.api_v1.endpoints.chat:chat_with_bot:118 - Gagal memproses chat: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash-lite\nPlease retry in 27.585504081s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'model': 'gemini-2.5-flash-lite', 'location': 'global'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '27s'}]}}
 2026-05-09 17:15:33 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 18:51:04 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 18:55:17 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 19:14:48 | INFO     | app.api.api_v1.endpoints.chat:chat_with_bot:74 - Menerima chat dari andhikap2323@gmail.com | Session: ed0a96a1-d221-4e8c-8487-70ad692a0e9b
+2026-05-21 19:14:49 | SUCCESS  | app.services.rag_service:__init__:36 - Gemini 2.5 Flash Lite initialized
+2026-05-21 19:14:49 | INFO     | app.services.rag_service:query:104 - RAG query: 'Bagaimana cara memperbaiki printer Epson ET-2550?...' | limit=5 | image=no
+2026-05-21 19:14:49 | INFO     | app.services.embedding_service:get_embedding_model:16 - Loading SentenceTransformer model: sentence-transformers/all-MiniLM-L6-v2
+2026-05-21 19:14:52 | SUCCESS  | app.services.embedding_service:get_embedding_model:18 - Embedding model loaded (384 dimensions)
+2026-05-21 19:15:08 | SUCCESS  | app.services.rag_service:query:168 - RAG query completed with 5 sources
+2026-05-21 19:15:09 | SUCCESS  | app.api.api_v1.endpoints.chat:chat_with_bot:107 - Chat riwayat ID #54 berhasil disimpan dengan 5 sumber.
+2026-05-21 19:15:21 | INFO     | app.api.api_v1.endpoints.chat:get_chat_history:133 - Mengambil riwayat chat untuk session_id: ed0a96a1-d221-4e8c-8487-70ad692a0e9b
+2026-05-21 19:15:23 | INFO     | app.api.api_v1.endpoints.chat:get_chat_history:133 - Mengambil riwayat chat untuk session_id: ed0a96a1-d221-4e8c-8487-70ad692a0e9b
+2026-05-21 19:20:01 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 19:20:04 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 19:21:08 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 19:21:11 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 19:44:37 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 19:44:53 | INFO     | app.api.api_v1.endpoints.knowledge:get_all_knowledge:62 - User adminbe@epsolve.com mengambil daftar Knowledge Base.
+2026-05-21 19:44:54 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 19:44:57 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 19:53:59 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 19:56:58 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 19:57:19 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 19:58:00 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 19:58:03 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:07:04 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:07:04 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:07:09 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:07:13 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:12:43 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 20:13:02 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-21 20:16:12 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:16:14 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:18:42 | INFO     | app.api.api_v1.endpoints.knowledge:get_all_knowledge:62 - User adminbe@epsolve.com mengambil daftar Knowledge Base.
+2026-05-21 20:18:55 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:18:57 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:19:20 | INFO     | app.services.email_service:send_resolution_email:125 - Email resolusi tiket #3 berhasil dikirim
+2026-05-21 20:19:20 | INFO     | app.services.embedding_service:get_embedding_model:16 - Loading SentenceTransformer model: sentence-transformers/all-MiniLM-L6-v2
+2026-05-21 20:19:24 | SUCCESS  | app.services.embedding_service:get_embedding_model:18 - Embedding model loaded (384 dimensions)
+2026-05-21 20:19:25 | SUCCESS  | app.api.api_v1.endpoints.tickets:update_ticket:224 - Knowledge Base otomatis #2779 dibuat dari Tiket #3
+2026-05-21 20:19:26 | INFO     | app.api.api_v1.endpoints.tickets:update_ticket:235 - Tiket #3 diperbarui oleh adminbe@epsolve.com. Status: open -> answered
+2026-05-21 20:19:30 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:19:32 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:19:38 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:19:39 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:20:00 | INFO     | app.api.api_v1.endpoints.chat:get_chat_history:133 - Mengambil riwayat chat untuk session_id: ed0a96a1-d221-4e8c-8487-70ad692a0e9b
+2026-05-21 20:23:39 | INFO     | app.api.api_v1.endpoints.tickets:create_ticket:40 - Menerima eskalasi tiket kategori Service Repair dari andhikap2323@gmail.com
+2026-05-21 20:23:40 | SUCCESS  | app.api.api_v1.endpoints.tickets:create_ticket:74 - Tiket #14 berhasil disimpan.
+2026-05-21 20:23:42 | INFO     | app.services.email_service:send_ticket_notification:98 - Email notifikasi tiket #14 dikirim ke 3 admin
+2026-05-21 20:23:47 | INFO     | app.api.api_v1.endpoints.knowledge:get_all_knowledge:62 - User andhikap2323@gmail.com mengambil daftar Knowledge Base.
+2026-05-21 20:24:30 | INFO     | app.api.api_v1.endpoints.knowledge:get_all_knowledge:62 - User adminbe@epsolve.com mengambil daftar Knowledge Base.
+2026-05-21 20:24:31 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-21 20:24:35 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s

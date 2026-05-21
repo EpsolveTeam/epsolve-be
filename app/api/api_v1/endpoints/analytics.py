@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from sqlalchemy import func
+from sqlalchemy import func, distinct
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -204,35 +204,43 @@ def get_dashboard_summary(
         )
         chart_data = [{"date": str(stat.date), "count": stat.count} for stat in daily_stats_query]
 
-        category_counts = (
+        ticket_category_rows = (
             db.query(Ticket.category, func.count(Ticket.id).label("count"))
             .filter(Ticket.created_at >= start_current_naive)
             .group_by(Ticket.category)
-            .order_by(func.count(Ticket.id).desc())
             .all()
         )
+        ticket_counts = {cat: count for cat, count in ticket_category_rows}
+
+        chat_category_rows = (
+            db.query(ChatLog.category, func.count(distinct(ChatLog.session_id)).label("count"))
+            .filter(
+                ChatLog.created_at >= start_current_naive,
+                ChatLog.category != None,
+            )
+            .group_by(ChatLog.category)
+            .all()
+        )
+        chat_counts = {cat: count for cat, count in chat_category_rows}
+
+        all_categories = set(list(ticket_counts.keys()) + list(chat_counts.keys()))
 
         problem_frequency = []
-        for cat, count in category_counts:
-            if cat:
-                cat_lower = cat.lower()
-                keyword_count = db.query(ChatLog).filter(
-                    ChatLog.created_at >= start_current_naive,
-                    ChatLog.user_query.ilike(f"%{cat_lower}%"),
-                ).count()
-            else:
-                keyword_count = 0
-
+        for cat in all_categories:
+            t_count = ticket_counts.get(cat, 0)
+            c_count = chat_counts.get(cat, 0)
             problem_frequency.append(
                 {
                     "category": cat,
-                    "ticket_count": count,
-                    "chat_count": keyword_count,
-                    "escalation_rate": f"{round((count / keyword_count * 100), 1)}%"
-                    if keyword_count > 0
+                    "ticket_count": t_count,
+                    "chat_count": c_count,
+                    "escalation_rate": f"{round((t_count / c_count * 100), 1)}%"
+                    if c_count > 0
                     else "0%",
                 }
             )
+
+        problem_frequency.sort(key=lambda x: x["chat_count"], reverse=True)
 
         return {
             "period": period,

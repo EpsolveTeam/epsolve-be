@@ -3,15 +3,15 @@ from uuid import UUID, uuid4
 import os
 from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
 from sqlalchemy.orm import Session
-from sqlalchemy import asc
-from typing import List, Optional
+from sqlalchemy import asc, func, distinct
+from typing import List, Optional, Dict
 from pydantic import BaseModel
 from loguru import logger
 
 from app.db.session import get_session
 from app.models.chat_log import ChatLog
 from app.models.user import User, UserRole
-from app.core.dependencies import get_current_user, require_karyawan
+from app.core.dependencies import get_current_user, require_karyawan, require_admin
 from app.services.rag_service import RAGService
 from app.core.config import settings
 
@@ -63,6 +63,7 @@ async def chat_with_bot(
     session_id: str = Form(...),
     user_query: str = Form(...),
     image: Optional[UploadFile] = File(None),
+    category: Optional[str] = Form(None),
     db: Session = Depends(get_session),
     current_user: User = Depends(require_karyawan),
 ):
@@ -96,7 +97,8 @@ async def chat_with_bot(
             user_query=user_query,
             image_query_url=image_url,
             bot_response=answer,
-            is_resolved=True
+            is_resolved=True,
+            category=category,
         )
         db.add(new_chat_log)
         db.commit()
@@ -207,3 +209,21 @@ def delete_chat_session(
     db.commit()
 
     logger.success(f"Sesi chat {session_id} berhasil dihapus ({len(chat_logs)} riwayat)")
+
+
+@router.get("/category-stats", response_model=Dict[str, int])
+def get_chat_category_stats(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Menghitung jumlah sesi chatbot per kategori dari tabel ChatLog.
+    Setiap sesi dihitung satu kali, menggunakan kategori yang dipilih user saat sesi dimulai.
+    """
+    results = (
+        db.query(ChatLog.category, func.count(distinct(ChatLog.session_id)).label("count"))
+        .filter(ChatLog.category != None)
+        .group_by(ChatLog.category)
+        .all()
+    )
+    return {cat: count for cat, count in results}

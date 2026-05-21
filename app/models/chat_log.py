@@ -11,4 +11,5 @@ class ChatLog(SQLModel, table=True):
     image_query_url: Optional[str] = None
     bot_response: str
     is_resolved: bool = Field(default=False)
+    category: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
