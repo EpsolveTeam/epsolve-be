@@ -187,3 +187,6 @@
 2026-05-21 20:24:30 | INFO     | app.api.api_v1.endpoints.knowledge:get_all_knowledge:62 - User adminbe@epsolve.com mengambil daftar Knowledge Base.
 2026-05-21 20:24:31 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
 2026-05-21 20:24:35 | INFO     | app.api.api_v1.endpoints.analytics:get_dashboard_summary:40 - Dashboard Analytics diakses. user=%s period=%s
+2026-05-28 17:36:58 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-28 18:57:58 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!
+2026-05-28 18:58:09 | INFO     | app.main:start_scheduler:39 - 🤖 Background Scheduler Started!

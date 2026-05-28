@@ -7,10 +7,13 @@ class KnowledgeCreate(BaseModel):
     content: str
     category: str
     division: str
+    faq_id: Optional[str] = None
 
 class KnowledgeListResponse(BaseModel):
     id: int
+    faq_id: Optional[str] = None
     title: str
+    content: str
     category: str
     division: str
     created_at: datetime
@@ -21,6 +24,7 @@ class KnowledgeListResponse(BaseModel):
 
 class KnowledgeDetailResponse(BaseModel):
     id: int
+    faq_id: Optional[str] = None
     title: str
     content: str
     category: str
@@ -33,6 +37,7 @@ class KnowledgeDetailResponse(BaseModel):
 
 class KnowledgeResponse(BaseModel):
     id: int
+    faq_id: Optional[str] = None
     title: str
     content: str
     category: str
@@ -46,3 +51,4 @@ class KnowledgeResponse(BaseModel):
 
 class KnowledgeUpdate(BaseModel):
     content: str
+    faq_id: Optional[str] = None

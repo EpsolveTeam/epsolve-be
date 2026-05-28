@@ -90,6 +90,10 @@ async def chat_with_bot(
 
         answer = rag_result["answer"]
         sources = rag_result["sources"]
+        no_answer = rag_result.get("no_answer", False)
+
+        # Ticket-flag logic: jika tidak ada jawaban, set is_resolved=false untuk trigger follow-up
+        is_resolved = not no_answer
 
         new_chat_log = ChatLog(
             session_id=session_id,
@@ -97,20 +101,22 @@ async def chat_with_bot(
             user_query=user_query,
             image_query_url=image_url,
             bot_response=answer,
-            is_resolved=True,
+            is_resolved=is_resolved,
             category=category,
         )
         db.add(new_chat_log)
         db.commit()
         db.refresh(new_chat_log)
 
-        logger.success(f"Chat riwayat ID #{new_chat_log.id} berhasil disimpan dengan {len(sources)} sumber.")
+        logger.success(f"Chat riwayat ID #{new_chat_log.id} berhasil disimpan dengan {len(sources)} sumber. ticket_flag={no_answer}")
 
         return {
             "message": "Pesan berhasil diproses",
             "data": {
                 "chat_log": new_chat_log,
-                "sources": sources
+                "sources": sources,
+                "no_answer": no_answer,
+                "ticket_flag": no_answer
             }
         }
 

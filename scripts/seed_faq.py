@@ -63,7 +63,8 @@ def create_knowledge_entry(chunk: Dict[str, Any]) -> KnowledgeBase:
         content=content,
         category=category,
         source_url=source_url,
-        division="Support"
+        division="Support",
+        faq_id=faq_id if faq_id else None
     )
 
 

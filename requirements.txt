@@ -23,3 +23,4 @@ numpy==1.26.4
 numpy<2
 reportlab>=4.0.0
 apscheduler==3.10.4
+rank_bm25==0.2.2

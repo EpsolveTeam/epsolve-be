@@ -1,11 +1,12 @@
 from sqlmodel import SQLModel, Field, Column
-from sqlalchemy import DateTime, func, String, Text
+from sqlalchemy import DateTime, func, String, Text, Boolean
 from pgvector.sqlalchemy import Vector
 from typing import List, Optional
 from datetime import datetime
 
 class KnowledgeBase(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    faq_id: Optional[str] = Field(default=None, sa_column=Column(String(100), unique=True, index=True))
     title: str = Field(default="Untitled")
     content: str = Field(sa_column=Column(Text))
     category: str = Field(default="General", sa_column=Column(String(100)))
