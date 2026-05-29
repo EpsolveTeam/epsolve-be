@@ -267,6 +267,8 @@ class RAGService:
             source_info = f"[Source {i}: {doc.title}]"
             if doc.category:
                 source_info += f" (Category: {doc.category})"
+            if doc.source_url:
+                source_info += f"\nURL: {doc.source_url}"
             context_parts.append(f"{source_info}\n{doc.content}")
         return "\n\n---\n\n".join(context_parts)
 
