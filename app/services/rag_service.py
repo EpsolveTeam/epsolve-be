@@ -179,8 +179,8 @@ TICKET_SYSTEM_PROMPT = (
     "without any additional text. "
     "Do NOT make up information. Be concise.\n\n"
     "Important:\n"
-    "- Append each source URL on a new line: (url)\n"
-    "- Keep all existing links in the content (Related tasks, URLs, etc.)"
+    "- Always end answer with a blank line, then the source URL on its own line: url\n"
+    "- Example:\nThe printer supports wireless printing.\n\n( https://epson.com/example )\n"
 )
 
 
