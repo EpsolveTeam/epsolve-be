@@ -179,7 +179,7 @@ TICKET_SYSTEM_PROMPT = (
     "without any additional text. "
     "Do NOT make up information. Be concise.\n\n"
     "Important:\n"
-    "- Append each source URL on a new line: (Sumber: url) or (Link: url)\n"
+    "- Append each source URL on a new line: (url)\n"
     "- Keep all existing links in the content (Related tasks, URLs, etc.)"
 )
 
