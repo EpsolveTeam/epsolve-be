@@ -178,11 +178,9 @@ TICKET_SYSTEM_PROMPT = (
     f"'{TICKET_FLAG}' "
     "without any additional text. "
     "Do NOT make up information. Be concise.\n\n"
-    "Important: Each source in the context has a URL listed. "
-    "You MUST include the relevant source URL(s) at the end of your answer. "
-    "Format them as a bullet list under a '📎 Sumber:' or '🔗 Link:' section. "
-    "If the content itself contains any links (like 'Related tasks', 'Related references', or any URLs), "
-    "keep them in your answer — do NOT remove or omit them."
+    "Important:\n"
+    "- Append each source URL on a new line: (Sumber: url) or (Link: url)\n"
+    "- Keep all existing links in the content (Related tasks, URLs, etc.)"
 )
 
 
@@ -378,11 +376,9 @@ class RAGService:
                             "You are a helpful Epson support assistant. "
                             "Use both the image and provided context to answer. "
                             f"If uncertain, respond exactly: '{TICKET_FLAG}'"
-                            "\n\nImportant: Each source in the context has a URL listed. "
-                            "You MUST include the relevant source URL(s) at the end of your answer. "
-                            "Format them as a bullet list under a '📎 Sumber:' or '🔗 Link:' section. "
-                            "If the content itself contains any links (like 'Related tasks', 'Related references', or any URLs), "
-                            "keep them in your answer — do NOT remove or omit them."
+                            "\n\nImportant:\n"
+                            "- Append each source URL on a new line: (Sumber: url) or (Link: url)\n"
+                            "- Keep all existing links in the content"
                         )
                     }
                     )
