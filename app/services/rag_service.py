@@ -177,7 +177,12 @@ TICKET_SYSTEM_PROMPT = (
     "If the answer is NOT found in the provided context, you MUST respond with exactly: "
     f"'{TICKET_FLAG}' "
     "without any additional text. "
-    "Do NOT make up information. Be concise."
+    "Do NOT make up information. Be concise.\n\n"
+    "Important: Each source in the context has a URL listed. "
+    "You MUST include the relevant source URL(s) at the end of your answer. "
+    "Format them as a bullet list under a '📎 Sumber:' or '🔗 Link:' section. "
+    "If the content itself contains any links (like 'Related tasks', 'Related references', or any URLs), "
+    "keep them in your answer — do NOT remove or omit them."
 )
 
 
@@ -368,13 +373,18 @@ class RAGService:
                     response = await self.genai_client.aio.models.generate_content(
                         model=self.chat_model,
                         contents=contents,
-                        config={
-                            "system_instruction": (
-                                "You are a helpful Epson support assistant. "
-                                "Use both the image and provided context to answer. "
-                                f"If uncertain, respond exactly: '{TICKET_FLAG}'"
-                            )
-                        }
+                    config={
+                        "system_instruction": (
+                            "You are a helpful Epson support assistant. "
+                            "Use both the image and provided context to answer. "
+                            f"If uncertain, respond exactly: '{TICKET_FLAG}'"
+                            "\n\nImportant: Each source in the context has a URL listed. "
+                            "You MUST include the relevant source URL(s) at the end of your answer. "
+                            "Format them as a bullet list under a '📎 Sumber:' or '🔗 Link:' section. "
+                            "If the content itself contains any links (like 'Related tasks', 'Related references', or any URLs), "
+                            "keep them in your answer — do NOT remove or omit them."
+                        )
+                    }
                     )
                     answer = response.text
                 else:
