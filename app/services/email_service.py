@@ -131,38 +131,48 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
     """
     Mengirim laporan Analytics ke email tujuan dengan link download PDF.
     Generate PDF → Upload ke Supabase → Kirim email dengan signed URL.
+
+    Catatan penting: konten PDF harus identik dengan yang dihasilkan oleh modal "Bagikan Laporan Analisis Periode Ini".
+    Karena itu PDF harus dibangkitkan dari `report_data` yang sama.
     """
     metrics = report_data.get("ticket_metrics", {})
     chats = report_data.get("chatbot_metrics", {})
     
-    success_rate = (chats.get("resolved_by_bot", 0) / chats.get("total_interactions", 1) * 100) if chats.get("total_interactions", 0) > 0 else 0
+    success_rate = (
+        (chats.get("resolved_by_bot", 0) / chats.get("total_interactions", 1) * 100)
+        if chats.get("total_interactions", 0) > 0
+        else chats.get("resolution_rate", 0)
+    )
     
     problem_rows = ""
     for item in report_data.get("problem_frequency", [])[:5]:
         problem_rows += f"""
         <tr>
             <td style="padding: 12px 0; color: #4b5563; font-size: 14px; border-bottom: 1px solid #f1f5f9;">{item.get('category', 'Unknown')}</td>
-            <td style="padding: 12px 0; color: #0051C3; font-size: 14px; font-weight: bold; text-align: right; border-bottom: 1px solid #f1f5f9;">{item.get('count', 0)}</td>
+            <td style="padding: 12px 0; color: #0051C3; font-size: 14px; font-weight: bold; text-align: right; border-bottom: 1px solid #f1f5f9;">{item.get('ticket_count', item.get('count', 0))}</td>
         </tr>"""
 
     button_style = "display: inline-block; background-color: #0051C3; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; margin-top: 20px;"
 
-    now = datetime.utcnow()
-    start_date = (now - timedelta(days=30)).strftime("%d%m%Y")
-    end_date = now.strftime("%d%m%Y")
-    filename = f"Laporan_{start_date}-{end_date}.pdf"
-    
+    start_date_raw = report_data.get("start_date")
+    end_date_raw = report_data.get("end_date")
+    generated_at_raw = report_data.get("generated_at")
+
+    def to_ddmmyyyy(value: str | None) -> str:
+        if not value:
+            return "-"
+        parts = str(value).split("/")
+        if len(parts) == 3:
+            return f"{parts[0]}{parts[1]}{parts[2]}"
+        return str(value).replace("/", "")
+
+    filename = f"Laporan_{to_ddmmyyyy(start_date_raw)}-{to_ddmmyyyy(end_date_raw)}.pdf"
+
     download_url = None
     try:
-        pdf_bytes = generate_analytics_pdf({
-            "period": "1m",
-            "generated_at": now.strftime("%d/%m/%Y %H:%M"),
-            "start_date": (now - timedelta(days=30)).strftime("%d/%m/%Y"),
-            "end_date": now.strftime("%d/%m/%Y"),
-            "tickets": []
-        })
+        pdf_bytes = generate_analytics_pdf(report_data)
         logger.info(f"PDF generated: {len(pdf_bytes)} bytes")
-        
+
         try:
             buckets = supabase.storage.list_buckets()
             bucket_exists = any(bucket.name == REPORTS_BUCKET for bucket in buckets)
@@ -171,30 +181,30 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
                 logger.info(f"Created Supabase bucket: {REPORTS_BUCKET}")
         except Exception as e:
             logger.warning(f"Bucket check failed (may exist): {e}")
-        
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
         unique_id = str(uuid.uuid4())[:8]
-        file_path = f"analytics/{filename}"
-        
+        file_path = f"analytics/{unique_id}_{filename}"
+
         supabase.storage.from_(REPORTS_BUCKET).upload(
             path=file_path,
             file=pdf_bytes,
-            file_options={"content-type": "application/pdf"}
+            file_options={"content-type": "application/pdf"},
         )
         logger.info(f"PDF uploaded to Supabase: {file_path}")
-        
+
         signed_url_response = supabase.storage.from_(REPORTS_BUCKET).create_signed_url(
             path=file_path,
-            expires_in=604800
+            expires_in=604800,
         )
         download_url = signed_url_response.get('signedURL') or signed_url_response.get('signed_url')
         if not download_url:
             raise ValueError(f"No signed URL in response: {signed_url_response}")
         logger.info(f"Signed URL generated: {download_url}")
-        
+
     except Exception as e:
         logger.error(f"Failed to prepare PDF/upload: {e}")
         download_url = None
+
 
     if download_url:
         download_section = f'''

@@ -15,13 +15,6 @@ from app.schemas.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeU
 router = APIRouter()
 
 
-def _get_kb_or_404(db: Session, kb_id: int) -> KnowledgeBase:
-    kb = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
-    if not kb:
-        raise HTTPException(status_code=404, detail="Data Knowledge Base tidak ditemukan")
-    return kb
-
-
 def _get_kb_by_faq_or_404(db: Session, faq_id: str) -> KnowledgeBase:
     kb = db.query(KnowledgeBase).filter(KnowledgeBase.faq_id == faq_id).first()
     if not kb:
@@ -205,79 +198,3 @@ def delete_knowledge_by_faq_id(
     logger.success(f"Knowledge Base faq_id={faq_id} berhasil dihapus oleh {current_user.email}.")
 
     return {"message": f"Knowledge Base faq_id={faq_id} berhasil dihapus"}
-
-
-@router.get("/{kb_id}", response_model=KnowledgeDetailResponse)
-def get_knowledge_by_id(
-    kb_id: int,
-    db: Session = Depends(get_session),
-    current_user: User = Depends(require_karyawan),
-):
-    """
-    Endpoint untuk melihat detail satu Knowledge Base berdasarkan ID.
-    """
-    kb_data = _get_kb_or_404(db, kb_id)
-    return kb_data
-
-
-@router.delete("/{kb_id}")
-def delete_knowledge(
-    kb_id: int,
-    db: Session = Depends(get_session),
-    current_user: User = Depends(require_admin),
-):
-    """
-    Endpoint untuk DELETE Knowledge Base berdasarkan ID (backward compatibility).
-    """
-    kb_data = _get_kb_or_404(db, kb_id)
-
-    db.delete(kb_data)
-    db.commit()
-
-    invalidate_bm25_cache()
-
-    logger.success(f"Knowledge Base ID #{kb_id} berhasil dihapus oleh {current_user.email}.")
-
-    return {"message": f"Knowledge Base ID #{kb_id} berhasil dihapus"}
-
-
-@router.put("/{kb_id}", response_model=KnowledgeResponse)
-def update_knowledge(
-    kb_id: int,
-    kb_in: KnowledgeUpdate,
-    db: Session = Depends(get_session),
-    current_user: User = Depends(require_admin),
-):
-    """
-    Endpoint untuk UPDATE data Knowledge Base berdasarkan ID (backward compatibility).
-    """
-    kb_data = _get_kb_or_404(db, kb_id)
-
-    if kb_in.content != kb_data.content:
-        kb_data.content = kb_in.content
-        try:
-            kb_data.embedding = get_embedding(kb_in.content)
-        except Exception as e:
-            logger.error(f"Failed to regenerate embedding: {e}")
-            raise HTTPException(status_code=500, detail="Gagal mengupdate embedding AI")
-
-    # Update faq_id jika disediakan
-    if kb_in.faq_id is not None and kb_in.faq_id != kb_data.faq_id:
-        existing = db.query(KnowledgeBase).filter(
-            KnowledgeBase.faq_id == kb_in.faq_id,
-            KnowledgeBase.id != kb_data.id
-        ).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"faq_id '{kb_in.faq_id}' sudah digunakan"
-            )
-        kb_data.faq_id = kb_in.faq_id
-
-    db.commit()
-    db.refresh(kb_data)
-
-    invalidate_bm25_cache()
-
-    logger.info(f"Jawaban Knowledge Base ID #{kb_id} berhasil diperbarui oleh {current_user.email}.")
-    return kb_data
