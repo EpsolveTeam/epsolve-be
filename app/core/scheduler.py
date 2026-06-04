@@ -10,8 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.db.session import engine
 from app.models.report_setting import ReportSetting
-from app.api.api_v1.endpoints.analytics import get_dashboard_summary
+from app.services.report_service import build_analytics_report_data
+
+
+
 from app.services.email_service import send_analytics_report_email
+
 
 
 PERIOD_DAYS = {"1w": 7, "1m": 30, "3m": 90}
@@ -54,17 +58,15 @@ def check_and_send_scheduled_reports() -> None:
             )
 
             try:
-                report_data = get_dashboard_summary(
-                    period=setting.period,
-                    db=db,
-                    current_user=None,
-                )
+                report_data = build_analytics_report_data(period=setting.period, db=db)
 
                 send_analytics_report_email(
+
                     user_email=setting.recipient_email,
                     user_name="Administrator",
                     report_data=report_data,
                 )
+
 
                 setting.last_sent_at = now
                 db.commit()

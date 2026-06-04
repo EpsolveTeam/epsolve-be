@@ -18,7 +18,10 @@ from app.models.report_setting import ReportSetting
 from app.models.ticket import Ticket
 from app.models.user import User, UserRole
 from app.schemas.report_settings import ReportSettingInput
-from app.services.email_service import generate_analytics_pdf, send_analytics_report_email
+from app.services.pdf_service import generate_analytics_pdf
+
+from app.services.email_service import send_analytics_report_email
+
 
 router = APIRouter()
 
