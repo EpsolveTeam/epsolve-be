@@ -259,7 +259,8 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
         logger.error(f"Gagal kirim email laporan: {e}")
 
 
-# generate_analytics_pdf dipindahkan ke app/services/analytics_pdf_service.py
-from app.services.analytics_pdf_service import generate_analytics_pdf
+# generate_analytics_pdf lives in app/services/pdf_service.py
+from app.services.pdf_service import generate_analytics_pdf
+
 
 
