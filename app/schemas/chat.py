@@ -23,6 +23,9 @@ class ChatLogResponse(BaseModel):
     image_query_url: Optional[str]
     bot_response: str
     is_resolved: bool
+    no_answer: bool
+    ticket_flag: bool
+    category: Optional[str]
     created_at: datetime
 
     model_config = {"from_attributes": True}

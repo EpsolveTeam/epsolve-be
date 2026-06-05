@@ -13,6 +13,7 @@ from app.models.chat_log import ChatLog
 from app.models.user import User, UserRole
 from app.core.dependencies import get_current_user, require_karyawan, require_admin
 from app.services.rag_service import RAGService
+from app.schemas.chat import ChatLogResponse
 from app.core.config import settings
 
 from supabase import create_client, Client
@@ -95,6 +96,9 @@ async def chat_with_bot(
         # Ticket-flag logic: jika tidak ada jawaban, set is_resolved=false untuk trigger follow-up
         is_resolved = not no_answer
 
+        # Determine ticket_flag: true jika respons bot mengandung TICKET_FLAG
+        ticket_flag = rag_result.get("no_answer", False)
+
         new_chat_log = ChatLog(
             session_id=session_id,
             user_id=current_user.id,
@@ -102,6 +106,8 @@ async def chat_with_bot(
             image_query_url=image_url,
             bot_response=answer,
             is_resolved=is_resolved,
+            no_answer=no_answer,
+            ticket_flag=ticket_flag,
             category=category,
         )
         db.add(new_chat_log)
@@ -126,7 +132,7 @@ async def chat_with_bot(
         logger.error(f"Gagal memproses chat: {str(e)}")
         raise HTTPException(status_code=500, detail="Terjadi kesalahan pada server saat memproses chat")
 
-@router.get("/history/{session_id}", response_model=List[ChatLog])
+@router.get("/history/{session_id}", response_model=List[ChatLogResponse])
 def get_chat_history(
     session_id: str,
     db: Session = Depends(get_session),
