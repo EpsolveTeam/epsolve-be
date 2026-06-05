@@ -208,12 +208,15 @@ def update_ticket(
             
             embedding = get_embedding(kb_content)
             
+            generated_faq_id = f"FAQ_{uuid.uuid4().hex[:8].upper()}"
+
             new_kb = KnowledgeBase(
                 title=kb_title,
                 content=kb_content,
                 category=ticket.category,
                 division=ticket.division,
-                embedding=embedding
+                faq_id=generated_faq_id,
+                embedding=embedding,
             )
             
             db.add(new_kb)
