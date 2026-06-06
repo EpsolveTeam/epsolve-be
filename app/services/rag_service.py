@@ -267,13 +267,22 @@ class RAGService:
     def format_context(self, docs: List[KnowledgeBase]) -> str:
         context_parts = []
         for i, doc in enumerate(docs, 1):
-            source_info = f"[Source {i}: {doc.title}]"
+            source_info = f"Document {i}: {doc.title}"
             if doc.category:
                 source_info += f" (Category: {doc.category})"
             if doc.source_url:
                 source_info += f"\nURL: {doc.source_url}"
             context_parts.append(f"{source_info}\n{doc.content}")
         return "\n\n---\n\n".join(context_parts)
+
+    @staticmethod
+    def _strip_citation_labels(answer: str) -> str:
+        """Strip citation/document reference labels from LLM output."""
+        answer = re.sub(r'\s*\[Source\s+\d+\]', '', answer)
+        answer = re.sub(r'\s*\(Source\s+\d+\)', '', answer)
+        answer = re.sub(r'\s*Document\s+\d+:', '', answer)
+        answer = re.sub(r'\s*\[Document\s+\d+\]', '', answer)
+        return answer.strip()
 
     async def generate_response(
         self,
@@ -371,16 +380,16 @@ class RAGService:
                     response = await self.genai_client.aio.models.generate_content(
                         model=self.chat_model,
                         contents=contents,
-                    config={
-                        "system_instruction": (
-                            "You are a helpful Epson support assistant. "
-                            "Use both the image and provided context to answer. "
-                            f"If uncertain, respond exactly: '{TICKET_FLAG}'"
-                            "\n\nImportant:\n"
-                            "- Append each source URL on a new line: (Sumber: url) or (Link: url)\n"
-                            "- Keep all existing links in the content"
-                        )
-                    }
+                        config={
+                            "system_instruction": (
+                                "You are a helpful Epson support assistant. "
+                                "Use both the image and provided context to answer. "
+                                f"If uncertain, respond exactly: '{TICKET_FLAG}'"
+                                "\n\nImportant:\n"
+                                "- Append each source URL on a new line: (Sumber: url) or (Link: url)\n"
+                                "- Keep all existing links in the content"
+                            )
+                        }
                     )
                     answer = response.text
                 else:
@@ -394,6 +403,9 @@ class RAGService:
         # Post-check: if response is ticket-flag, override
         if self._is_ticket_flag_response(answer):
             answer = TICKET_FLAG
+
+        # Strip citation/document reference labels from the answer as a safety net
+        answer = self._strip_citation_labels(answer)
 
         sources = []
         for doc in docs:
