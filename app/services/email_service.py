@@ -136,11 +136,7 @@ def send_analytics_report_email(user_email: str, user_name: str, report_data: di
     metrics = report_data.get("ticket_metrics", {})
     chats = report_data.get("chatbot_metrics", {})
     
-    success_rate = (
-        (chats.get("resolved_by_bot", 0) / chats.get("total_interactions", 1) * 100)
-        if chats.get("total_interactions", 0) > 0
-        else chats.get("resolution_rate", 0)
-    )
+    success_rate = chats.get("resolution_rate", 0)
     
     problem_rows = ""
     for item in report_data.get("problem_frequency", [])[:5]:
