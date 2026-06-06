@@ -203,8 +203,8 @@ def update_ticket(
         )
 
         try:
-            kb_content = f"**Keluhan Pelanggan:**\n{ticket.description}\n\n**Solusi Helpdesk:**\n{ticket.admin_response}"
-            kb_title = ticket.name or "Ticket Solution"
+            kb_title = ticket.description or "Ticket Solution"
+            kb_content = ticket.admin_response
             
             embedding = get_embedding(kb_content)
             
