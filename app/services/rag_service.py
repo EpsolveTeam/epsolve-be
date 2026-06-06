@@ -7,6 +7,7 @@ from loguru import logger
 from app.models.knowledge import KnowledgeBase
 from app.core.config import settings
 from app.services.embedding_service import get_embedding
+from app.services.translation_service import expand_query_for_bm25
 
 
 try:
@@ -232,9 +233,11 @@ class RAGService:
         category: Optional[str] = None
     ) -> List[KnowledgeBase]:
         """
-        Hybrid retrieval: combine vector (pgvector) + BM25 via Reciprocal Rank Fusion.
+        Hybrid retrieval: combine vector (pgvector) + BM25 (multi-language) via Reciprocal Rank Fusion.
+        BM25 dijalankan dengan query asli DAN query terjemahan (ID/EN)
+        agar keyword lintas bahasa tetap tercocokkan.
         """
-        # 1. Vector retrieval (pgvector cosine distance)
+        # 1. Vector retrieval (pgvector cosine distance) — sudah multi-lingual
         logger.info("Hybrid: fetching vector results")
         vector_docs = await self.search_similar_docs(
             query_embedding=query_embedding,
@@ -243,24 +246,40 @@ class RAGService:
         )
         logger.info(f"Hybrid: vector returned {len(vector_docs)} docs")
 
-        # 2. BM25 retrieval
-        bm25_docs = []
+        # 2. BM25 retrieval with multi-language query expansion
+        all_bm25_docs: List[KnowledgeBase] = []
+        seen_bm25_ids: set = set()
+
         if RANK_BM25_AVAILABLE:
             try:
-                bm25_docs = self.bm25.search(
-                    query_text=query_text,
-                    db=self.db,
-                    limit=limit * 2,
-                    category=category
-                )
-                logger.info(f"Hybrid: BM25 returned {len(bm25_docs)} docs")
+                # Dapatkan berbagai versi query (asli + terjemahan)
+                expanded_queries = expand_query_for_bm25(query_text)
+                logger.info(f"Hybrid: BM25 running with {len(expanded_queries)} query variants")
+
+                for q in expanded_queries:
+                    try:
+                        docs = self.bm25.search(
+                            query_text=q,
+                            db=self.db,
+                            limit=limit * 2,
+                            category=category
+                        )
+                        # Tambahkan hanya dokumen yang belum ada (hindari duplikat)
+                        for d in docs:
+                            if d.id not in seen_bm25_ids:
+                                all_bm25_docs.append(d)
+                                seen_bm25_ids.add(d.id)
+                    except Exception as e:
+                        logger.error(f"BM25 search failed for query '{q[:30]}...': {e}")
+
+                logger.info(f"Hybrid: BM25 total unique docs = {len(all_bm25_docs)} (from {len(expanded_queries)} variants)")
             except Exception as e:
                 logger.error(f"BM25 search failed: {e}")
         else:
             logger.warning("BM25 not available, using vector-only")
 
         # 3. Reciprocal Rank Fusion
-        fused = reciprocal_rank_fusion(vector_docs, bm25_docs, final_limit=limit)
+        fused = reciprocal_rank_fusion(vector_docs, all_bm25_docs, final_limit=limit)
         logger.info(f"Hybrid: fused result count = {len(fused)}")
         return fused
 
