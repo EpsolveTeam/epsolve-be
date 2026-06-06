@@ -1,3 +1,4 @@
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -13,6 +14,15 @@ from app.services.rag_service import invalidate_bm25_cache
 from app.schemas.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeUpdate, KnowledgeListResponse, KnowledgeDetailResponse
 
 router = APIRouter()
+
+
+def _generate_faq_id(db: Session) -> str:
+    """Generate a unique faq_id in format FAQ_XXXXXXXX (8 hex chars)."""
+    while True:
+        faq_id = "FAQ_" + secrets.token_hex(4).upper()
+        existing = db.query(KnowledgeBase).filter(KnowledgeBase.faq_id == faq_id).first()
+        if not existing:
+            return faq_id
 
 
 def _get_kb_by_faq_or_404(db: Session, faq_id: str) -> KnowledgeBase:
@@ -46,12 +56,15 @@ def create_knowledge(
     try:
         embedding = get_embedding(kb_in.content)
 
+        # Auto-generate faq_id jika tidak disediakan
+        faq_id = kb_in.faq_id if kb_in.faq_id else _generate_faq_id(db)
+
         new_kb = KnowledgeBase(
             title=kb_in.title,
             content=kb_in.content,
             category=kb_in.category,
             division=kb_in.division,
-            faq_id=kb_in.faq_id,
+            faq_id=faq_id,
             embedding=embedding
         )
 
